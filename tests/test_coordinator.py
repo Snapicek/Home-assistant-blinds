@@ -221,3 +221,93 @@ async def test_evaluation_reports_lux_value_in_result(monkeypatch):
     result = await coord._async_update_data()
 
     assert result["lux"] == 18000.0
+
+
+# ── Seasonal factor percentage conversion ────────────────────────────────────
+
+async def test_seasonal_factor_percent_converts_correctly(monkeypatch):
+    """150 % entity value should become a ×1.5 multiplier on the thresholds."""
+    hass = FakeHass()
+    # default lux_high = 35000; with summer factor 150 % → 35000 × 1.5 = 52500.
+    # lux of 40000 is above 35000 (would normally → SHADE) but below 52500, so
+    # with the scaling applied it should stay OPEN (current).
+    hass.states.set("sensor.living_room_illuminance", "40000")
+    room = make_room()
+    room.entities["enabled"] = FakeSwitch(True)
+    room.entities["seasonal_split"] = FakeSwitch(True)
+    room.entities["summer_lux_factor"] = FakeNumber(150)  # 150 % == ×1.5
+    room.entities["winter_lux_factor"] = FakeNumber(100)
+
+    summer_now = datetime(2026, 7, 21, 12, 0)
+    coord = _make_coordinator(monkeypatch, hass, room, now=summer_now)
+    result = await coord._async_update_data()
+
+    assert result["desired"] == SemanticState.OPEN
+
+
+async def test_winter_factor_percent_lowers_thresholds(monkeypatch):
+    """50 % entity value should become a ×0.5 multiplier on the thresholds."""
+    hass = FakeHass()
+    # default lux_high = 35000; with winter factor 50 % → 35000 × 0.5 = 17500.
+    # lux of 20000 is below 35000 (would normally → MEDIUM) but above 17500, so
+    # with scaling it should go to SHADE.
+    hass.states.set("sensor.living_room_illuminance", "20000")
+    room = make_room()
+    room.current_state = SemanticState.OPEN
+    room.entities["enabled"] = FakeSwitch(True)
+    room.entities["seasonal_split"] = FakeSwitch(True)
+    room.entities["summer_lux_factor"] = FakeNumber(100)
+    room.entities["winter_lux_factor"] = FakeNumber(50)  # 50 % == ×0.5
+
+    winter_now = datetime(2026, 1, 21, 12, 0)
+    coord = _make_coordinator(monkeypatch, hass, room, now=winter_now)
+    result = await coord._async_update_data()
+
+    assert result["desired"] == SemanticState.SHADE
+
+
+# ── Sunset/sunrise offset arithmetic ─────────────────────────────────────────
+
+async def test_positive_sunset_offset_delays_night_start(monkeypatch):
+    """A +60 min sunset offset should keep the blinds daytime-active 1 h past raw sunset."""
+    hass = FakeHass()
+    hass.states.set("sensor.living_room_illuminance", "0")
+    room = make_room()
+    room.entities["enabled"] = FakeSwitch(True)
+    room.entities["sunset_offset_minutes"] = FakeNumber(60)
+
+    # Raw sunset is at 20:00; with +60 min offset the night boundary moves to 21:00.
+    # At 20:30 the blinds should still be in daytime mode (desired = OPEN at 0 lux).
+    at_2030 = datetime(2026, 7, 21, 20, 30)
+    coord = _make_coordinator(monkeypatch, hass, room, now=at_2030)
+    raw_sunset = datetime(2026, 7, 21, 20, 0)
+    monkeypatch.setattr(
+        coord, "_sunset_with_offset",
+        lambda now: raw_sunset + __import__("datetime").timedelta(minutes=60),
+    )
+    result = await coord._async_update_data()
+
+    assert result["desired"] == SemanticState.OPEN
+
+
+async def test_negative_sunset_offset_brings_night_start_forward(monkeypatch):
+    """A −60 min sunset offset should trigger night/closed 1 h before raw sunset."""
+    hass = FakeHass()
+    hass.states.set("sensor.living_room_illuminance", "5000")
+    room = make_room()
+    room.entities["enabled"] = FakeSwitch(True)
+    room.entities["sunset_offset_minutes"] = FakeNumber(-60)
+
+    # Raw sunset 20:00; offset makes effective sunset 19:00.
+    # At 19:30 desired state should be CLOSED (night).
+    at_1930 = datetime(2026, 7, 21, 19, 30)
+    coord = _make_coordinator(monkeypatch, hass, room, now=at_1930)
+    raw_sunset = datetime(2026, 7, 21, 20, 0)
+    monkeypatch.setattr(
+        coord, "_sunset_with_offset",
+        lambda now: raw_sunset + __import__("datetime").timedelta(minutes=-60),
+    )
+    result = await coord._async_update_data()
+
+    assert result["desired"] == SemanticState.CLOSED
+

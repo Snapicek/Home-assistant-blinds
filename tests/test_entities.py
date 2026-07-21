@@ -111,6 +111,30 @@ async def test_number_entity_rounds_values_for_integer_precision_spec():
     assert isinstance(entity.native_value, int)
 
 
+async def test_number_entity_resets_to_default_when_restored_value_is_out_of_range():
+    """Persisted float-scale values (e.g. 1.15 from before unit change to %)
+    must not survive restore if they fall outside the current [min, max] range."""
+    from custom_components.chained_blinds.const import THRESHOLD_NUMBER_SPECS as SPECS
+
+    # Find summer_lux_factor spec (range 20–300, default 115)
+    spec = next(s for s in SPECS if s.key == "summer_lux_factor")
+    room = make_room()
+    entity = ChainedBlindsNumber(room, spec)
+
+    # Simulate RestoreEntity returning an old float-factor value (1.15)
+    class _FakeLastState:
+        state = "1.15"
+        attributes = {}
+
+    entity.async_get_last_state = lambda: _FakeLastState()  # type: ignore[assignment]
+    entity.async_write_ha_state = lambda: None
+
+    await entity.async_added_to_hass()
+
+    # 1.15 rounds to 1, which is below min_value=20 → must fall back to default 115
+    assert entity.native_value == 115
+
+
 def test_enabled_switch_has_correct_icon():
     room = make_room()
     entity = EnabledSwitch(room)

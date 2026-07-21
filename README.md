@@ -102,16 +102,16 @@ the device Settings section.
 | Entity | Purpose |
 |---|---|
 | `number.<room>_lux_medium` | Brightness level that starts moving toward medium shade |
-| `number.<room>_lux_high` | Brightness level that starts moving toward full shade |
 | `number.<room>_lux_medium_reopen` | Lower brightness needed before moving back toward medium |
+| `number.<room>_lux_high` | Brightness level that starts moving toward full shade |
 | `number.<room>_lux_high_reopen` | Lower brightness needed before moving back from full shade |
 | `number.<room>_dwell_minutes` | Minimum delay before another darkening move |
 | `number.<room>_reopen_dwell_minutes` | Minimum delay before another opening move |
-| `number.<room>_sunset_offset_minutes` | Shift computed sunset earlier/later |
+| `number.<room>_override_duration_minutes` | How long pause automation stays active before auto-clear |
 | `number.<room>_sunrise_offset_minutes` | Shift computed sunrise earlier/later |
+| `number.<room>_sunset_offset_minutes` | Shift computed sunset earlier/later |
 | `number.<room>_summer_lux_factor` | Seasonal multiplier for summer brightness response |
 | `number.<room>_winter_lux_factor` | Seasonal multiplier for winter brightness response |
-| `number.<room>_override_duration_minutes` | How long pause automation stays active before auto-clear |
 | `number.<room>_<left/right>_<state>_pos` | Per-cover calibration percentage for each semantic state |
 | `switch.<room>_seasonal_split` | Enable separate summer/winter sensitivity multipliers |
 | `switch.<room>_sunrise_open` | Use sunrise (plus offset) as morning opening boundary |

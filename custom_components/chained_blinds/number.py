@@ -63,7 +63,15 @@ class ChainedBlindsNumber(NumberEntity, RestoreEntity):
         self._room.entities[self._spec.key] = self
         if (last_state := await self.async_get_last_state()) is not None:
             try:
-                self._attr_native_value = self._normalize_native_value(float(last_state.state))
+                restored = self._normalize_native_value(float(last_state.state))
+                # Guard against persisted values from an older scale (e.g. a float
+                # factor like 1.15 that was stored before the unit changed to %).
+                # If the value is outside the current valid range, reset to the
+                # spec default so the entity starts in a sensible state.
+                if self._spec.min_value <= restored <= self._spec.max_value:
+                    self._attr_native_value = restored
+                else:
+                    self._attr_native_value = self._normalize_native_value(self._spec.default)
             except (TypeError, ValueError):
                 pass
 

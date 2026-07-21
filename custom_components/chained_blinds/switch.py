@@ -34,9 +34,9 @@ async def async_setup_entry(
     async_add_entities(
         [
             EnabledSwitch(room),
+            OverrideSwitch(hass, room),
             SeasonalSplitSwitch(room),
             SunriseOpenSwitch(room),
-            OverrideSwitch(hass, room),
         ]
     )
 
