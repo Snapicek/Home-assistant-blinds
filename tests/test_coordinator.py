@@ -138,18 +138,109 @@ async def test_seasonal_split_changes_thresholds_by_month(monkeypatch):
     assert summer_result["moved"] is False
 
 
-async def test_sunrise_open_keeps_night_until_sunrise(monkeypatch):
+async def test_seasonal_split_off_does_not_scale_thresholds(monkeypatch):
+    hass = FakeHass()
+    hass.states.set("sensor.lux", "40000")  # above default lux_high 35k → SHADE
+    room = make_room()
+    room.entities["enabled"] = FakeSwitch(True)
+    room.entities["seasonal_split"] = FakeSwitch(False)
+
+    coord = _make_coordinator(monkeypatch, hass, room)
+    result = await coord._async_update_data()
+
+    assert result["desired"] == SemanticState.SHADE
+    assert result["moved"] is True
+
+
+async def test_sunrise_open_off_uses_fixed_open_time(monkeypatch):
+    hass = FakeHass()
+    hass.states.set("sensor.lux", "60000")
+    room = make_room()
+    room.entities["enabled"] = FakeSwitch(True)
+    room.entities["sunrise_open"] = FakeSwitch(False)
+
+    before_fixed_open = datetime(2026, 7, 21, 6, 30)  # 06:30 < default 07:00
+    coord = _make_coordinator(monkeypatch, hass, room, now=before_fixed_open)
+    result = await coord._async_update_data()
+
+    assert result["desired"] == SemanticState.CLOSED
+
+
+async def test_sunrise_open_after_sunrise_allows_lux_evaluation(monkeypatch):
     hass = FakeHass()
     hass.states.set("sensor.lux", "60000")
     room = make_room()
     room.entities["enabled"] = FakeSwitch(True)
     room.entities["sunrise_open"] = FakeSwitch(True)
 
-    now = datetime(2026, 7, 21, 6, 0)
-    coord = _make_coordinator(monkeypatch, hass, room, now=now)
+    after_sunrise = datetime(2026, 7, 21, 8, 0)
+    coord = _make_coordinator(monkeypatch, hass, room, now=after_sunrise)
     monkeypatch.setattr(coord, "_sunrise_with_offset", lambda now: datetime(2026, 7, 21, 7, 0))
 
     result = await coord._async_update_data()
 
-    assert result["desired"] == SemanticState.CLOSED
+    assert result["desired"] == SemanticState.SHADE
+    assert result["moved"] is True
 
+
+async def test_lux_sensor_unavailable_state_treated_as_zero(monkeypatch):
+    hass = FakeHass()
+    hass.states.set("sensor.lux", "unavailable")
+    room = make_room()
+    room.entities["enabled"] = FakeSwitch(True)
+
+    coord = _make_coordinator(monkeypatch, hass, room)
+    result = await coord._async_update_data()
+
+    assert result["lux"] == 0.0
+    assert result["desired"] == SemanticState.OPEN
+
+
+async def test_missing_lux_sensor_defaults_to_open(monkeypatch):
+    hass = FakeHass()  # no lux state registered at all
+    room = make_room()
+    room.entities["enabled"] = FakeSwitch(True)
+
+    coord = _make_coordinator(monkeypatch, hass, room)
+    result = await coord._async_update_data()
+
+    assert result["lux"] == 0.0
+    assert result["desired"] == SemanticState.OPEN
+
+
+async def test_sun_at_window_false_prevents_shade_but_allows_medium(monkeypatch):
+    hass = FakeHass()
+    hass.states.set("sensor.lux", "60000")  # would be SHADE without sun gating
+    hass.states.set("binary_sensor.sun", "off")
+    room = make_room(sun_sensor="binary_sensor.sun")
+    room.entities["enabled"] = FakeSwitch(True)
+
+    coord = _make_coordinator(monkeypatch, hass, room)
+    result = await coord._async_update_data()
+
+    assert result["desired"] == SemanticState.MEDIUM
+
+
+async def test_sun_at_window_true_allows_shade(monkeypatch):
+    hass = FakeHass()
+    hass.states.set("sensor.lux", "60000")
+    hass.states.set("binary_sensor.sun", "on")
+    room = make_room(sun_sensor="binary_sensor.sun")
+    room.entities["enabled"] = FakeSwitch(True)
+
+    coord = _make_coordinator(monkeypatch, hass, room)
+    result = await coord._async_update_data()
+
+    assert result["desired"] == SemanticState.SHADE
+
+
+async def test_evaluation_reports_lux_value_in_result(monkeypatch):
+    hass = FakeHass()
+    hass.states.set("sensor.lux", "18000")
+    room = make_room()
+    room.entities["enabled"] = FakeSwitch(True)
+
+    coord = _make_coordinator(monkeypatch, hass, room)
+    result = await coord._async_update_data()
+
+    assert result["lux"] == 18000.0

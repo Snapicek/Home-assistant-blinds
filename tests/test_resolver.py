@@ -224,3 +224,74 @@ def test_darkening_after_a_recent_lighten_only_needs_short_dwell():
         desired=SHADE, current=MEDIUM, last_move_time=last_move, now=now,
         dwell_minutes=10, reopen_dwell_minutes=30,
     ) is True
+
+
+# --- production-scale thresholds --------------------------------------------------
+
+def test_at_shade_stays_when_lux_between_high_reopen_and_high():
+    now = datetime(2026, 7, 21, 12, 0)
+    T = _thresholds(lux_medium=12000, lux_high=35000, lux_medium_reopen=7000, lux_high_reopen=21000)
+    assert resolve_desired_state(
+        now=now, lux=22000, sun_at_window=None, current=SHADE,
+        open_time=OPEN_TIME, sunset_with_offset=datetime(2026, 7, 21, 20, 0),
+        override_active=False, thresholds=T,
+    ) == SHADE
+
+
+def test_at_open_moves_to_medium_exactly_at_medium_threshold():
+    now = datetime(2026, 7, 21, 12, 0)
+    T = _thresholds(lux_medium=12000, lux_high=35000, lux_medium_reopen=7000, lux_high_reopen=21000)
+    assert resolve_desired_state(
+        now=now, lux=12000, sun_at_window=None, current=OPEN,
+        open_time=OPEN_TIME, sunset_with_offset=datetime(2026, 7, 21, 20, 0),
+        override_active=False, thresholds=T,
+    ) == MEDIUM
+
+
+def test_at_medium_reopens_to_open_just_below_medium_reopen():
+    now = datetime(2026, 7, 21, 12, 0)
+    T = _thresholds(lux_medium=12000, lux_high=35000, lux_medium_reopen=7000, lux_high_reopen=21000)
+    assert resolve_desired_state(
+        now=now, lux=6999, sun_at_window=None, current=MEDIUM,
+        open_time=OPEN_TIME, sunset_with_offset=datetime(2026, 7, 21, 20, 0),
+        override_active=False, thresholds=T,
+    ) == OPEN
+
+
+def test_at_medium_holds_exactly_at_medium_reopen_boundary():
+    now = datetime(2026, 7, 21, 12, 0)
+    T = _thresholds(lux_medium=12000, lux_high=35000, lux_medium_reopen=7000, lux_high_reopen=21000)
+    assert resolve_desired_state(
+        now=now, lux=7000, sun_at_window=None, current=MEDIUM,
+        open_time=OPEN_TIME, sunset_with_offset=datetime(2026, 7, 21, 20, 0),
+        override_active=False, thresholds=T,
+    ) == MEDIUM
+
+
+def test_at_shade_reopens_all_the_way_to_open_when_lux_very_low():
+    now = datetime(2026, 7, 21, 12, 0)
+    T = _thresholds(lux_medium=12000, lux_high=35000, lux_medium_reopen=7000, lux_high_reopen=21000)
+    assert resolve_desired_state(
+        now=now, lux=100, sun_at_window=None, current=SHADE,
+        open_time=OPEN_TIME, sunset_with_offset=datetime(2026, 7, 21, 20, 0),
+        override_active=False, thresholds=T,
+    ) == OPEN
+
+
+def test_closed_reopens_to_correct_lux_tier_at_morning():
+    now = datetime(2026, 7, 21, 9, 0)
+    T = _thresholds(lux_medium=12000, lux_high=35000, lux_medium_reopen=7000, lux_high_reopen=21000)
+    assert resolve_desired_state(
+        now=now, lux=14000, sun_at_window=None, current=CLOSED,
+        open_time=OPEN_TIME, sunset_with_offset=datetime(2026, 7, 21, 20, 0),
+        override_active=False, thresholds=T,
+    ) == MEDIUM
+
+
+def test_is_night_exactly_at_open_time_is_not_night():
+    assert is_night(datetime(2026, 7, 21, 7, 0), OPEN_TIME, datetime(2026, 7, 21, 20, 0)) is False
+
+
+def test_is_night_one_second_before_open_time_is_night():
+    now = datetime(2026, 7, 21, 6, 59, 59)
+    assert is_night(now, OPEN_TIME, datetime(2026, 7, 21, 20, 0)) is True

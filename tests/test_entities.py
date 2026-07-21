@@ -81,3 +81,48 @@ def test_open_time_entity_defaults():
     entity = OpenTimeEntity(room)
     assert entity.native_value == time(7, 0)
     assert entity.unique_id == f"{room.entry_id}_open_time"
+
+
+def test_number_entity_icon_is_set_from_spec():
+    room = make_room()
+    spec = THRESHOLD_NUMBER_SPECS[0]  # lux_medium
+    entity = ChainedBlindsNumber(room, spec)
+    assert entity.icon == spec.icon
+
+
+def test_enabled_switch_has_correct_icon():
+    room = make_room()
+    entity = EnabledSwitch(room)
+    assert entity.icon == "mdi:auto-mode"
+
+
+def test_seasonal_split_switch_has_correct_icon():
+    room = make_room()
+    entity = SeasonalSplitSwitch(room)
+    assert entity.icon == "mdi:weather-partly-snowy-rainy"
+
+
+def test_sunrise_open_switch_has_correct_icon():
+    room = make_room()
+    entity = SunriseOpenSwitch(room)
+    assert entity.icon == "mdi:weather-sunset-up"
+
+
+def test_state_select_has_correct_icon():
+    room = make_room()
+    entity = ChainedBlindsStateSelect(room)
+    assert entity.icon == "mdi:blinds"
+
+
+def test_threshold_number_specs_include_seasonal_and_sunrise_entries():
+    keys = [s.key for s in THRESHOLD_NUMBER_SPECS]
+    assert "summer_lux_factor" in keys
+    assert "winter_lux_factor" in keys
+    assert "sunrise_offset_minutes" in keys
+    assert "sunset_offset_minutes" in keys
+    assert "override_duration_minutes" in keys
+
+
+def test_all_threshold_number_specs_have_icons():
+    for spec in THRESHOLD_NUMBER_SPECS:
+        assert spec.icon is not None, f"{spec.key} is missing an icon"
