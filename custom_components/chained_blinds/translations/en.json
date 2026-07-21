@@ -8,7 +8,7 @@
           "left_cover": "Left/primary cover",
           "right_cover": "Right cover (optional)",
           "lux_sensor": "Lux sensor",
-          "sun_sensor": "Sun-at-window binary sensor (optional)"
+          "sun_sensor": "Sun-at-window sensor (optional, binary_sensor or true/false sensor)"
         }
       }
     },
@@ -27,7 +27,7 @@
           "left_cover": "Left/primary cover",
           "right_cover": "Right cover (optional)",
           "lux_sensor": "Lux sensor",
-          "sun_sensor": "Sun-at-window binary sensor (optional)"
+          "sun_sensor": "Sun-at-window sensor (optional, binary_sensor or true/false sensor)"
         }
       }
     },

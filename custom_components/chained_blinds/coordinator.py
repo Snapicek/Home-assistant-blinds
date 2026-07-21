@@ -108,7 +108,13 @@ class ChainedBlindsCoordinator(DataUpdateCoordinator[dict]):
         sun_at_window: bool | None = None
         if room.sun_sensor:
             sun_state = self.hass.states.get(room.sun_sensor)
-            sun_at_window = sun_state.state == "on" if sun_state is not None else None
+            # Accepts a real binary_sensor ("on"/"off") as well as a plain
+            # sensor exposing a boolean-ish string ("true"/"false"), since
+            # some setups derive sun-at-window from a template sensor rather
+            # than a binary_sensor.
+            sun_at_window = (
+                sun_state.state.lower() in ("on", "true") if sun_state is not None else None
+            )
 
         now = dt_util.now()
 
