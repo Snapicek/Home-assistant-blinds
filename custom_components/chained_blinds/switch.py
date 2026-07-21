@@ -2,7 +2,7 @@
 
 The override switch replaces the original blueprint's dependency on a
 user-supplied `timer.` helper: turning it on means "hold, do nothing" and it
-auto-clears after `override_duration_minutes`, reproducing `timer.finished`
+auto-clears after `override_duration_minutes` from config, reproducing `timer.finished`
 semantics without requiring the user to pre-create anything.
 """
 from __future__ import annotations
@@ -12,18 +12,16 @@ from datetime import timedelta
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
-from homeassistant.helpers.entity import DeviceInfo, EntityCategory
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    DOMAIN,
+    CONF_OVERRIDE_DURATION_MINUTES,
     DEFAULT_OVERRIDE_DURATION_MINUTES,
-    DEFAULT_RAMP_ENABLED,
-    DEFAULT_SEASONAL_SPLIT,
-    DEFAULT_USE_SUNRISE_OPEN,
+    DOMAIN,
 )
 from .models import RoomRuntimeData
 from .helpers import elapsed_seconds, minutes_to_seconds
@@ -36,10 +34,7 @@ async def async_setup_entry(
     async_add_entities(
         [
             EnabledSwitch(room),
-            OverrideSwitch(hass, room),
-            RampEnabledSwitch(room),
-            SeasonalSplitSwitch(room),
-            SunriseOpenSwitch(room),
+            OverrideSwitch(hass, room, entry),
         ]
     )
 
@@ -84,55 +79,14 @@ class EnabledSwitch(_RoomSwitchBase):
         self._attr_icon = "mdi:auto-mode"
 
 
-class SeasonalSplitSwitch(_RoomSwitchBase):
-    """Enable summer/winter factors for lux thresholds."""
-
-    def __init__(self, room: RoomRuntimeData) -> None:
-        super().__init__(
-            room,
-            "seasonal_split",
-            "Use seasonal light sensitivity",
-            DEFAULT_SEASONAL_SPLIT,
-        )
-        self._attr_icon = "mdi:weather-partly-snowy-rainy"
-        self._attr_entity_category = EntityCategory.CONFIG
-
-
-class RampEnabledSwitch(_RoomSwitchBase):
-    """Enable gradual, step-by-step movement instead of direct jumps."""
-
-    def __init__(self, room: RoomRuntimeData) -> None:
-        super().__init__(
-            room,
-            "ramp_enabled",
-            "Use gradual movement",
-            DEFAULT_RAMP_ENABLED,
-        )
-        self._attr_icon = "mdi:stairs"
-        self._attr_entity_category = EntityCategory.CONFIG
-
-
-class SunriseOpenSwitch(_RoomSwitchBase):
-    """Use sunrise(+offset) as the morning open boundary instead of fixed time."""
-
-    def __init__(self, room: RoomRuntimeData) -> None:
-        super().__init__(
-            room,
-            "sunrise_open",
-            "Use sunrise for morning opening",
-            DEFAULT_USE_SUNRISE_OPEN,
-        )
-        self._attr_icon = "mdi:weather-sunset-up"
-        self._attr_entity_category = EntityCategory.CONFIG
-
-
 class OverrideSwitch(_RoomSwitchBase):
     """On means "hold current position" -- checked first, before anything else."""
 
-    def __init__(self, hass: HomeAssistant, room: RoomRuntimeData) -> None:
+    def __init__(self, hass: HomeAssistant, room: RoomRuntimeData, entry: ConfigEntry) -> None:
         super().__init__(room, "override", "Pause automation", False)
         self._attr_icon = "mdi:hand-back-right"
         self._hass = hass
+        self._entry = entry
         self._unsub_expiry: CALLBACK_TYPE | None = None
         self._override_until = None
 
@@ -186,12 +140,8 @@ class OverrideSwitch(_RoomSwitchBase):
     def _schedule_expiry(self, *, seconds: float | None = None) -> None:
         self._cancel_expiry()
         if seconds is None:
-            duration_entity = self._room.entities.get("override_duration_minutes")
-            minutes = (
-                duration_entity.native_value
-                if duration_entity is not None and duration_entity.native_value is not None
-                else DEFAULT_OVERRIDE_DURATION_MINUTES
-            )
+            config = {**self._entry.data, **self._entry.options}
+            minutes = config.get(CONF_OVERRIDE_DURATION_MINUTES, DEFAULT_OVERRIDE_DURATION_MINUTES)
             seconds = minutes_to_seconds(minutes)
 
         self._override_until = dt_util.utcnow() + timedelta(seconds=seconds)

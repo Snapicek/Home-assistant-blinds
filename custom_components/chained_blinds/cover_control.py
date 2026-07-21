@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
@@ -20,11 +21,11 @@ _LOGGER = logging.getLogger(__name__)
 STAGGER_SECONDS = 1
 
 
-def _calibrated_position(room: RoomRuntimeData, role: str, state: SemanticState) -> float:
-    entity = room.entities.get(f"{role}_{state.value}_pos")
-    if entity is not None and entity.native_value is not None:
-        return float(entity.native_value)
-    return DEFAULT_CALIBRATION[state]
+def _calibrated_position(config_entry: ConfigEntry, role: str, state: SemanticState) -> float:
+    """Read calibration from config, falling back to DEFAULT_CALIBRATION."""
+    config = {**config_entry.data, **config_entry.options}
+    key = f"{role}_{state.value}_pos"
+    return float(config.get(key, DEFAULT_CALIBRATION[state]))
 
 def _current_cover_position(hass: HomeAssistant, entity_id: str) -> float | None:
     state = hass.states.get(entity_id)
@@ -76,13 +77,13 @@ async def _async_apply_positions(
 
 
 async def async_move_to_state(
-    hass: HomeAssistant, room: RoomRuntimeData, target_state: SemanticState
+    hass: HomeAssistant, config_entry: ConfigEntry, room: RoomRuntimeData, target_state: SemanticState
 ) -> None:
     """Move the room's cover(s) to `target_state`'s calibrated position."""
-    left_position = _calibrated_position(room, "left", target_state)
+    left_position = _calibrated_position(config_entry, "left", target_state)
     right_position: float | None = None
     if room.right_cover:
-        right_position = _calibrated_position(room, "right", target_state)
+        right_position = _calibrated_position(config_entry, "right", target_state)
     await _async_apply_positions(
         hass,
         room,
@@ -102,20 +103,21 @@ async def async_move_to_state(
 
 async def async_move_towards_state(
     hass: HomeAssistant,
+    config_entry: ConfigEntry,
     room: RoomRuntimeData,
     target_state: SemanticState,
     *,
     step_percent: float,
 ) -> bool:
     """Move one incremental step toward a semantic target; return True if reached."""
-    left_target = _calibrated_position(room, "left", target_state)
+    left_target = _calibrated_position(config_entry, "left", target_state)
     left_current = _current_cover_position(hass, room.left_cover)
     left_next = step_towards(left_current, left_target, step_percent)
 
     right_next: float | None = None
     right_target: float | None = None
     if room.right_cover:
-        right_target = _calibrated_position(room, "right", target_state)
+        right_target = _calibrated_position(config_entry, "right", target_state)
         right_current = _current_cover_position(hass, room.right_cover)
         right_next = step_towards(right_current, right_target, step_percent)
 

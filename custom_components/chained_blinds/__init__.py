@@ -23,7 +23,7 @@ from .models import RoomRuntimeData
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.NUMBER, Platform.SELECT, Platform.SWITCH, Platform.TIME]
+PLATFORMS: list[Platform] = [Platform.SELECT, Platform.SWITCH]
 
 STORAGE_VERSION = 1
 
@@ -40,6 +40,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         left_cover=config[CONF_LEFT_COVER],
         right_cover=config.get(CONF_RIGHT_COVER) or None,
         lux_sensor=config[CONF_LUX_SENSOR],
+        config_entry=entry,
         store=store,
     )
     await room.async_load_persisted()

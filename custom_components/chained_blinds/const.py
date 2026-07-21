@@ -34,6 +34,26 @@ CONF_LEFT_COVER = "left_cover"
 CONF_RIGHT_COVER = "right_cover"
 CONF_LUX_SENSOR = "lux_sensor"
 
+# Config entry keys (tuning, now moved from entity platform to config flow).
+CONF_LUX_MEDIUM = "lux_medium"
+CONF_LUX_HIGH = "lux_high"
+CONF_LUX_MEDIUM_REOPEN = "lux_medium_reopen"
+CONF_LUX_HIGH_REOPEN = "lux_high_reopen"
+CONF_DWELL_MINUTES = "dwell_minutes"
+CONF_REOPEN_DWELL_MINUTES = "reopen_dwell_minutes"
+CONF_OVERRIDE_DURATION_MINUTES = "override_duration_minutes"
+CONF_RAMP_STEP_PERCENT = "ramp_step_percent"
+CONF_RAMP_INTERVAL_MINUTES = "ramp_interval_minutes"
+CONF_SUNRISE_OFFSET_MINUTES = "sunrise_offset_minutes"
+CONF_SUNSET_OFFSET_MINUTES = "sunset_offset_minutes"
+CONF_SUMMER_LUX_FACTOR = "summer_lux_factor"
+CONF_WINTER_LUX_FACTOR = "winter_lux_factor"
+CONF_SEASONAL_SPLIT = "seasonal_split"
+CONF_USE_SUNRISE_OPEN = "use_sunrise_open"
+CONF_RAMP_ENABLED = "ramp_enabled"
+CONF_OPEN_TIME = "open_time"
+CONF_NON_WORKDAY_OPEN_TIME = "non_workday_open_time"
+
 # Default calibrated raw positions (%), per semantic state. Must be tuned
 # per physical cover — these are just seed values for the number entities.
 DEFAULT_CALIBRATION: dict[SemanticState, float] = {
@@ -78,6 +98,14 @@ DEFAULT_RAMP_ENABLED = False
 WORKDAY_SENSOR_ENTITY_ID = "binary_sensor.workday_sensor"
 
 COVER_ROLES = ("left", "right")
+
+
+def calibration_config_keys(role: str) -> tuple[str, ...]:
+    """Per-cover-per-state calibration config keys, e.g. left_open_pos, left_medium_pos, etc."""
+    return tuple(
+        f"{role}_{state.value}_pos"
+        for state in SemanticState
+    )
 
 
 @dataclass(frozen=True)

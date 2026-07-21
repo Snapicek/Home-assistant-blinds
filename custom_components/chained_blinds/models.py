@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.storage import Store
 
 from .const import SemanticState
@@ -23,6 +24,7 @@ class RoomRuntimeData:
     left_cover: str
     right_cover: str | None
     lux_sensor: str
+    config_entry: ConfigEntry
     store: Store
 
     # Tracked state (rule 10: only written when a real move happens).

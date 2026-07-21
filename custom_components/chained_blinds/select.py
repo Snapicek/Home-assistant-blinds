@@ -57,7 +57,7 @@ class ChainedBlindsStateSelect(SelectEntity, RestoreEntity):
         # method, never by importing this class).
         from .cover_control import async_move_to_state
 
-        await async_move_to_state(self.hass, self._room, SemanticState(option))
+        await async_move_to_state(self.hass, self._room.config_entry, self._room, SemanticState(option))
         if self._room.coordinator is not None:
             await self._room.coordinator.async_request_refresh()
 

@@ -59,13 +59,16 @@ class FakeStore:
 class FakeConfigEntry:
     """Minimal stand-in for homeassistant.config_entries.ConfigEntry.
 
-    Only needs to satisfy what DataUpdateCoordinator.__init__ accesses.
+    Includes data and options for tuning configuration.
     """
 
-    entry_id = "test_entry"
-    domain = "chained_blinds"
-    title = "Test Room"
-    state = "loaded"
+    def __init__(self, data: dict | None = None, options: dict | None = None):
+        self.entry_id = "test_entry"
+        self.domain = "chained_blinds"
+        self.title = "Test Room"
+        self.state = "loaded"
+        self.data = data or {}
+        self.options = options or {}
 
     def async_on_unload(self, callback):
         """Register a callback to be called when the config entry is unloaded."""
@@ -96,8 +99,64 @@ def disable_ha_state_writes(entity) -> None:
     entity.async_write_ha_state = lambda: None
 
 
-def make_room(**overrides):
+def make_room(config_data: dict | None = None, **overrides):
     from custom_components.chained_blinds.models import RoomRuntimeData
+    from custom_components.chained_blinds.const import (
+        CONF_LEFT_COVER,
+        CONF_LUX_SENSOR,
+        CONF_LUX_MEDIUM,
+        CONF_LUX_HIGH,
+        CONF_LUX_MEDIUM_REOPEN,
+        CONF_LUX_HIGH_REOPEN,
+        CONF_DWELL_MINUTES,
+        CONF_REOPEN_DWELL_MINUTES,
+        CONF_OVERRIDE_DURATION_MINUTES,
+        CONF_RAMP_STEP_PERCENT,
+        CONF_RAMP_INTERVAL_MINUTES,
+        CONF_OPEN_TIME,
+        CONF_NON_WORKDAY_OPEN_TIME,
+        DEFAULT_LUX_MEDIUM,
+        DEFAULT_LUX_HIGH,
+        DEFAULT_LUX_MEDIUM_REOPEN,
+        DEFAULT_LUX_HIGH_REOPEN,
+        DEFAULT_DWELL_MINUTES,
+        DEFAULT_REOPEN_DWELL_MINUTES,
+        DEFAULT_OVERRIDE_DURATION_MINUTES,
+        DEFAULT_RAMP_STEP_PERCENT,
+        DEFAULT_RAMP_INTERVAL_MINUTES,
+        DEFAULT_OPEN_TIME,
+        DEFAULT_NON_WORKDAY_OPEN_TIME,
+        DEFAULT_CALIBRATION,
+        SemanticState,
+    )
+
+    # Build default config data with all tuning values
+    default_config = {
+        CONF_LEFT_COVER: "cover.living_room_left_blind",
+        CONF_LUX_SENSOR: "sensor.living_room_illuminance",
+        CONF_LUX_MEDIUM: DEFAULT_LUX_MEDIUM,
+        CONF_LUX_HIGH: DEFAULT_LUX_HIGH,
+        CONF_LUX_MEDIUM_REOPEN: DEFAULT_LUX_MEDIUM_REOPEN,
+        CONF_LUX_HIGH_REOPEN: DEFAULT_LUX_HIGH_REOPEN,
+        CONF_DWELL_MINUTES: DEFAULT_DWELL_MINUTES,
+        CONF_REOPEN_DWELL_MINUTES: DEFAULT_REOPEN_DWELL_MINUTES,
+        CONF_OVERRIDE_DURATION_MINUTES: DEFAULT_OVERRIDE_DURATION_MINUTES,
+        CONF_RAMP_STEP_PERCENT: DEFAULT_RAMP_STEP_PERCENT,
+        CONF_RAMP_INTERVAL_MINUTES: DEFAULT_RAMP_INTERVAL_MINUTES,
+        CONF_OPEN_TIME: DEFAULT_OPEN_TIME,
+        CONF_NON_WORKDAY_OPEN_TIME: DEFAULT_NON_WORKDAY_OPEN_TIME,
+        # Calibration for left cover
+        "left_open_pos": DEFAULT_CALIBRATION[SemanticState.OPEN],
+        "left_medium_pos": DEFAULT_CALIBRATION[SemanticState.MEDIUM],
+        "left_shade_pos": DEFAULT_CALIBRATION[SemanticState.SHADE],
+        "left_closed_pos": DEFAULT_CALIBRATION[SemanticState.CLOSED],
+    }
+
+    # Allow test to override config values
+    if config_data:
+        default_config.update(config_data)
+
+    config_entry = FakeConfigEntry(data=default_config)
 
     defaults = dict(
         entry_id="test_entry",
@@ -105,6 +164,7 @@ def make_room(**overrides):
         left_cover="cover.living_room_left_blind",
         right_cover=None,
         lux_sensor="sensor.living_room_illuminance",
+        config_entry=config_entry,
         store=FakeStore(),
     )
     defaults.update(overrides)

@@ -71,14 +71,17 @@ async def test_first_evaluation_moves_immediately(monkeypatch):
 
 
 async def test_dwell_lock_blocks_a_too_soon_lightening_move(monkeypatch):
+    from custom_components.chained_blinds.const import CONF_REOPEN_DWELL_MINUTES, CONF_DWELL_MINUTES
+
     hass = FakeHass()
     hass.states.set("sensor.living_room_illuminance", "0")  # dark -> OPEN, a lightening from SHADE
-    room = make_room()
+    room = make_room(config_data={
+        CONF_REOPEN_DWELL_MINUTES: 30,
+        CONF_DWELL_MINUTES: 10,
+    })
     room.current_state = SemanticState.SHADE
     room.last_move_time = NOON - timedelta(minutes=5)
     room.entities["enabled"] = FakeSwitch(True)
-    room.entities["reopen_dwell_minutes"] = FakeNumber(30)
-    room.entities["dwell_minutes"] = FakeNumber(10)
 
     coord = _make_coordinator(monkeypatch, hass, room)
     result = await coord._async_update_data()
@@ -89,15 +92,18 @@ async def test_dwell_lock_blocks_a_too_soon_lightening_move(monkeypatch):
 
 
 async def test_darkening_move_applies_after_short_dwell(monkeypatch):
+    from custom_components.chained_blinds.const import CONF_REOPEN_DWELL_MINUTES, CONF_DWELL_MINUTES
+
     hass = FakeHass()
     # bright -> SHADE, a darkening from MEDIUM
     hass.states.set("sensor.living_room_illuminance", "60000")
-    room = make_room()
+    room = make_room(config_data={
+        CONF_REOPEN_DWELL_MINUTES: 30,
+        CONF_DWELL_MINUTES: 10,
+    })
     room.current_state = SemanticState.MEDIUM
     room.last_move_time = NOON - timedelta(minutes=15)
     room.entities["enabled"] = FakeSwitch(True)
-    room.entities["reopen_dwell_minutes"] = FakeNumber(30)
-    room.entities["dwell_minutes"] = FakeNumber(10)
 
     coord = _make_coordinator(monkeypatch, hass, room)
     result = await coord._async_update_data()
@@ -107,15 +113,22 @@ async def test_darkening_move_applies_after_short_dwell(monkeypatch):
 
 
 async def test_seasonal_split_changes_thresholds_by_month(monkeypatch):
+    from custom_components.chained_blinds.const import (
+        CONF_SEASONAL_SPLIT,
+        CONF_SUMMER_LUX_FACTOR,
+        CONF_WINTER_LUX_FACTOR,
+    )
+
     # January: winter factor lowers thresholds, so 30k lux should darken to SHADE.
     hass_winter = FakeHass()
     hass_winter.states.set("sensor.living_room_illuminance", "30000")
-    room_winter = make_room()
+    room_winter = make_room(config_data={
+        CONF_SEASONAL_SPLIT: True,
+        CONF_SUMMER_LUX_FACTOR: 150,
+        CONF_WINTER_LUX_FACTOR: 50,
+    })
     room_winter.current_state = SemanticState.MEDIUM
     room_winter.entities["enabled"] = FakeSwitch(True)
-    room_winter.entities["seasonal_split"] = FakeSwitch(True)
-    room_winter.entities["summer_lux_factor"] = FakeNumber(150)
-    room_winter.entities["winter_lux_factor"] = FakeNumber(50)
 
     winter_now = datetime(2026, 1, 21, 12, 0)
     coord_winter = _make_coordinator(monkeypatch, hass_winter, room_winter, now=winter_now)
@@ -127,12 +140,13 @@ async def test_seasonal_split_changes_thresholds_by_month(monkeypatch):
     # July: summer factor raises thresholds, so the same 30k lux should hold MEDIUM.
     hass_summer = FakeHass()
     hass_summer.states.set("sensor.living_room_illuminance", "30000")
-    room_summer = make_room()
+    room_summer = make_room(config_data={
+        CONF_SEASONAL_SPLIT: True,
+        CONF_SUMMER_LUX_FACTOR: 150,
+        CONF_WINTER_LUX_FACTOR: 50,
+    })
     room_summer.current_state = SemanticState.MEDIUM
     room_summer.entities["enabled"] = FakeSwitch(True)
-    room_summer.entities["seasonal_split"] = FakeSwitch(True)
-    room_summer.entities["summer_lux_factor"] = FakeNumber(150)
-    room_summer.entities["winter_lux_factor"] = FakeNumber(50)
 
     summer_now = datetime(2026, 7, 21, 12, 0)
     coord_summer = _make_coordinator(monkeypatch, hass_summer, room_summer, now=summer_now)
@@ -143,12 +157,15 @@ async def test_seasonal_split_changes_thresholds_by_month(monkeypatch):
 
 
 async def test_seasonal_split_off_does_not_scale_thresholds(monkeypatch):
+    from custom_components.chained_blinds.const import CONF_SEASONAL_SPLIT
+
     hass = FakeHass()
     # above default lux_high 35k → SHADE
     hass.states.set("sensor.living_room_illuminance", "40000")
-    room = make_room()
+    room = make_room(config_data={
+        CONF_SEASONAL_SPLIT: False,
+    })
     room.entities["enabled"] = FakeSwitch(True)
-    room.entities["seasonal_split"] = FakeSwitch(False)
 
     coord = _make_coordinator(monkeypatch, hass, room)
     result = await coord._async_update_data()
@@ -158,11 +175,14 @@ async def test_seasonal_split_off_does_not_scale_thresholds(monkeypatch):
 
 
 async def test_sunrise_open_off_uses_fixed_open_time(monkeypatch):
+    from custom_components.chained_blinds.const import CONF_USE_SUNRISE_OPEN
+
     hass = FakeHass()
     hass.states.set("sensor.living_room_illuminance", "60000")
-    room = make_room()
+    room = make_room(config_data={
+        CONF_USE_SUNRISE_OPEN: False,
+    })
     room.entities["enabled"] = FakeSwitch(True)
-    room.entities["sunrise_open"] = FakeSwitch(False)
 
     before_fixed_open = datetime(2026, 7, 21, 6, 30)  # 06:30 < default 07:00
     coord = _make_coordinator(monkeypatch, hass, room, now=before_fixed_open)
@@ -172,11 +192,14 @@ async def test_sunrise_open_off_uses_fixed_open_time(monkeypatch):
 
 
 async def test_sunrise_open_after_sunrise_allows_lux_evaluation(monkeypatch):
+    from custom_components.chained_blinds.const import CONF_USE_SUNRISE_OPEN
+
     hass = FakeHass()
     hass.states.set("sensor.living_room_illuminance", "60000")
-    room = make_room()
+    room = make_room(config_data={
+        CONF_USE_SUNRISE_OPEN: True,
+    })
     room.entities["enabled"] = FakeSwitch(True)
-    room.entities["sunrise_open"] = FakeSwitch(True)
 
     after_sunrise = datetime(2026, 7, 21, 8, 0)
     coord = _make_coordinator(monkeypatch, hass, room, now=after_sunrise)
@@ -190,14 +213,16 @@ async def test_sunrise_open_after_sunrise_allows_lux_evaluation(monkeypatch):
 
 async def test_workday_sensor_off_uses_non_workday_open_time(monkeypatch):
     from datetime import time
+    from custom_components.chained_blinds.const import CONF_OPEN_TIME, CONF_NON_WORKDAY_OPEN_TIME
 
     hass = FakeHass()
     hass.states.set("sensor.living_room_illuminance", "60000")
     hass.states.set("binary_sensor.workday_sensor", "off")
-    room = make_room()
+    room = make_room(config_data={
+        CONF_OPEN_TIME: time(7, 0),
+        CONF_NON_WORKDAY_OPEN_TIME: time(9, 30),
+    })
     room.entities["enabled"] = FakeSwitch(True)
-    room.entities["open_time"] = FakeNumber(time(7, 0))
-    room.entities["non_workday_open_time"] = FakeNumber(time(9, 30))
 
     at_0800 = datetime(2026, 7, 21, 8, 0)
     coord = _make_coordinator(monkeypatch, hass, room, now=at_0800)
@@ -209,14 +234,16 @@ async def test_workday_sensor_off_uses_non_workday_open_time(monkeypatch):
 
 async def test_workday_sensor_on_uses_workday_open_time(monkeypatch):
     from datetime import time
+    from custom_components.chained_blinds.const import CONF_OPEN_TIME, CONF_NON_WORKDAY_OPEN_TIME
 
     hass = FakeHass()
     hass.states.set("sensor.living_room_illuminance", "60000")
     hass.states.set("binary_sensor.workday_sensor", "on")
-    room = make_room()
+    room = make_room(config_data={
+        CONF_OPEN_TIME: time(7, 0),
+        CONF_NON_WORKDAY_OPEN_TIME: time(9, 30),
+    })
     room.entities["enabled"] = FakeSwitch(True)
-    room.entities["open_time"] = FakeNumber(time(7, 0))
-    room.entities["non_workday_open_time"] = FakeNumber(time(9, 30))
 
     at_0800 = datetime(2026, 7, 21, 8, 0)
     coord = _make_coordinator(monkeypatch, hass, room, now=at_0800)
