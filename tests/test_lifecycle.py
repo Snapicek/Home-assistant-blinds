@@ -222,7 +222,7 @@ async def test_async_unload_entry_drops_room_data_when_platforms_unload(monkeypa
 async def test_override_switch_restores_future_deadline_and_schedules_remaining(monkeypatch):
     hass = FakeHass()
     room = make_room()
-    entity = OverrideSwitch(hass, room)
+    entity = OverrideSwitch(hass, room, room.config_entry)
 
     now = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
     until = now + timedelta(minutes=2)
@@ -257,7 +257,7 @@ async def test_override_switch_restores_future_deadline_and_schedules_remaining(
 async def test_override_switch_turns_off_when_restored_deadline_is_expired(monkeypatch):
     hass = FakeHass()
     room = make_room()
-    entity = OverrideSwitch(hass, room)
+    entity = OverrideSwitch(hass, room, room.config_entry)
 
     now = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
     expired_until = now - timedelta(seconds=1)
