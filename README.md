@@ -1,108 +1,153 @@
 # Chained Blinds Controller
 
-A Home Assistant **custom integration** (installable via HACS as a custom
-repository, category *Integration*) for chain-driven motorized blinds where
-0% and 100% are both fully dark and the position of maximum light differs
-per physical cover and must be calibrated.
+[![CI](https://github.com/snapicek/home-assistant-blinds/actions/workflows/validate.yml/badge.svg)](https://github.com/snapicek/home-assistant-blinds/actions/workflows/validate.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/snapicek/home-assistant-blinds?style=flat-square)](https://github.com/snapicek/home-assistant-blinds/releases)
+[![License: MIT](https://img.shields.io/github/license/snapicek/home-assistant-blinds?style=flat-square)](LICENSE)
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg?style=flat-square)](https://hacs.xyz)
 
-This project used to be a markdown prompt template for generating a YAML
-automation blueprint. It's now a real Python integration, configured from
-the HA UI instead of hand-edited YAML.
+A Home Assistant custom integration for **chain-driven motorized blinds** where both 0 % and 100 % are fully dark and the position of maximum light differs per physical cover and must be calibrated individually.
 
-## Status
+The integration automatically moves your covers through four semantic states based on a lux sensor, sun position, and configurable thresholds — all tunable live from the dashboard without restarting Home Assistant.
 
-Implemented:
+---
 
-- `const.py` — domain, semantic states (`open`/`medium`/`shade`/`closed`),
-  rank table, default thresholds/dwell values, entity specs.
-- `resolver.py` — the pure decision logic (night window, lux tiers,
-  sun-at-window gating, hysteresis on lightening moves, dwell lock).
-- `models.py` — per-room runtime data + restart-safe persistence
-  (`current_state`/`last_move_time`) via `homeassistant.helpers.storage.Store`.
-- `config_flow.py` — Config Flow + Options Flow (left/right cover, lux
-  sensor, optional sun-at-window sensor).
-- `number.py` / `select.py` / `switch.py` / `time.py` — the live-tunable
-  dashboard entities: lux thresholds (+ reopen hysteresis), dwell minutes,
-  sunset offset, per-cover-per-state calibration, enable switch, manual
-  override switch (self-contained — no external `timer` helper needed),
-  open time, and the tracked-state select.
-- `cover_control.py` — looks up calibrated positions and calls
-  `cover.set_cover_position` only, with a 1s stagger for the second cover.
-- `coordinator.py` — 5-minute + event-driven re-evaluation wiring the
-  resolver to `cover_control`.
-- `__init__.py` — entry setup/teardown, listener wiring, reload-on-options.
-- `manifest.json` / `hacs.json` — HACS Integration-category metadata.
-- `.github/workflows/validate.yml` — hassfest + HACS validation + pytest.
-- Test suite (`tests/`): resolver unit tests are the executable spec;
-  cover_control/coordinator/config_flow/entity tests run against lightweight
-  hand-rolled fakes rather than the full `pytest-homeassistant-custom-component`
-  harness (that package's transitive dependencies didn't build cleanly in
-  the sandbox this was developed in — see `tests/fakes.py`'s docstring).
-  Run with `pytest`.
+## Features
 
-Not yet done / needs a real Home Assistant instance to verify:
+- **Four semantic states** — `open`, `medium`, `shade`, `closed` — mapped to per-cover calibrated raw positions.
+- **Automatic lux-based control** — moves covers darker as light increases, lighter when light drops, using separate thresholds for each direction (hysteresis).
+- **Dwell lock** — prevents rapid down→up→down cycling that can damage chain-drive mechanisms.
+- **Sun-at-window gating** — optional binary sensor to skip darkening when the sun is not directly on the window.
+- **Night window** — configurable time range during which the integration holds the blind closed regardless of lux.
+- **Manual override** — dedicated switch holds the current position for a configurable number of minutes, then auto-clears; no external `timer` helper needed.
+- **Fully UI-configured** — Config Flow setup, all thresholds and calibration values adjustable via dashboard entities (no YAML editing).
+- **Two-cover rooms** — left and right covers move together with a 1 s stagger so they don't strain the same circuit simultaneously.
 
-- End-to-end HACS custom-repository install flow and the config flow UI.
-- Real chain-driven cover behavior at calibrated raw percentages.
-- HA restart persistence of `current_state`/`last_move_time` (unit-tested
-  against a fake store; not yet checked against a real restart).
-- Real `sun.sun`/sunset+offset timing across timezones/DST.
-- Two simultaneous config entries (two rooms) not colliding.
-- Full entity-lifecycle tests (`RestoreEntity` restore-on-add, config-flow
-  FlowManager steps end-to-end) via `pytest-homeassistant-custom-component`.
+---
 
-The `hacs` CI job checks readiness for the *official HACS default store*
-listing, not for adding this as your own custom repository (which works
-regardless of this job's result). It currently fails on things only you can
-set: repo description and topics (GitHub repo "About" section) and brand
-assets (a submission to the separate `home-assistant/brands` repo) — none of
-these block personal use, only official-store listing, so they're left as
-manual/optional follow-up.
+## Requirements
 
-## Design summary
+| Requirement | Notes |
+|---|---|
+| Home Assistant | ≥ 2024.4 |
+| A lux sensor entity | e.g. `sensor.living_room_illuminance` |
+| One or two `cover` entities | Chain-driven roller blind(s) |
+| *(Optional)* Sun-at-window `binary_sensor` | Gates darkening moves |
 
-Each cover is controlled only via `cover.set_cover_position` with an
-explicit calibrated percentage — never `open_cover`/`close_cover`. Covers
-move between four semantic states, not raw percentages:
+---
 
-| State | Rank | Meaning |
-| --- | --- | --- |
-| `open` | 0 | Straight/max light, ~75% (calibrated per cover). |
-| `medium` | 1 | Partially closed. |
-| `shade` | 2 | Sun-blocking position. |
-| `closed` | 3 | Fully dark, 0%. |
+## Installation
 
-Darkening (moving to a higher rank) happens immediately. Lightening (moving
-to a lower rank) requires the smoothed lux to cross a separate, lower
-"reopen" threshold and a longer dwell period — this hysteresis plus the
-dwell lock is what prevents chain-load-damaging `down → up → down` cycling.
-See `custom_components/chained_blinds/resolver.py` and its tests for the
-exact rules.
+### Via HACS (recommended)
 
-A manual override is its own switch (`switch.<room>_override`): turning it
-on holds the current position and auto-clears after
-`number.<room>_override_duration_minutes`, without needing a pre-created
-`timer.` helper. Manually picking a state on `select.<room>_state` routes
-through the same move path the automatic resolver uses, so it never
-bypasses calibration or dwell bookkeeping — but it doesn't disable the
-resolver, which can still move things again on its next cycle unless you
-also turn off `switch.<room>_enabled` or engage override.
+1. Open HACS in Home Assistant.
+2. Go to **Integrations** → click the three-dot menu → **Custom repositories**.
+3. Paste `https://github.com/snapicek/home-assistant-blinds` and set category to **Integration**, then click **Add**.
+4. Search for **Chained Blinds Controller** and click **Download**.
+5. Restart Home Assistant.
 
-## Installing
+### Manual
 
-1. HACS → Custom repositories → add this repo's URL, category *Integration*.
-2. Install, restart Home Assistant.
-3. Settings → Devices & Services → Add Integration → "Chained Blinds
-   Controller" → pick the left cover (required), right cover (optional),
-   lux sensor, and optional sun-at-window binary sensor.
-4. Calibrate: on the room's device page, set each `number.*_pos` entity to
-   the raw position that gives that physical cover the right amount of
-   light for that semantic state, then tune the lux thresholds/dwell values
-   to taste — all live, no reload needed.
+1. Download or clone this repository.
+2. Copy the `custom_components/chained_blinds/` folder into your Home Assistant config directory:
+   ```
+   <config>/custom_components/chained_blinds/
+   ```
+3. Restart Home Assistant.
+
+---
+
+## Configuration
+
+1. Go to **Settings → Devices & Services → Add Integration**.
+2. Search for **Chained Blinds Controller** and select it.
+3. Fill in the config form:
+   - **Room name** — used as the prefix for all created entities.
+   - **Left cover** *(required)* — a `cover` entity.
+   - **Right cover** *(optional)* — second `cover` entity; moves 1 s after the left one.
+   - **Lux sensor** — a `sensor` entity reporting illuminance in lux.
+   - **Sun-at-window sensor** *(optional)* — a `binary_sensor`; when `off` the integration will not darken.
+4. Click **Submit**. A new device appears under **Devices & Services**.
+
+You can change any of these settings at any time via the integration's **Configure** button.
+
+### Calibration
+
+Each semantic state maps to a raw cover position (0–100 %). After setup, open the room's device page and adjust the `number` entities:
+
+| Entity | What to set |
+|---|---|
+| `number.<room>_left_open_pos` | Raw % giving maximum light for the left cover |
+| `number.<room>_left_medium_pos` | Partial-shade position |
+| `number.<room>_left_shade_pos` | Sun-blocking position |
+| `number.<room>_right_*_pos` | Same for the right cover |
+
+All changes take effect on the next evaluation cycle — no restart or reload needed.
+
+### Threshold & timing entities
+
+| Entity | Purpose |
+|---|---|
+| `number.<room>_lux_close` | Lux level that triggers darkening |
+| `number.<room>_lux_reopen` | Lower lux level required to lighten (hysteresis) |
+| `number.<room>_dwell_minutes` | Minimum minutes to wait before lightening |
+| `number.<room>_override_duration_minutes` | How long the manual override holds |
+| `number.<room>_sunset_offset_minutes` | Shift the effective sunset time |
+| `time.<room>_night_start` / `time.<room>_night_end` | Night window — blinds stay closed |
+| `switch.<room>_enabled` | Master on/off for automatic control |
+| `switch.<room>_override` | Pause automation; auto-clears after the override duration |
+| `select.<room>_state` | Manually set the current semantic state |
+
+---
+
+## How it works
+
+<details>
+<summary>Show details</summary>
+
+Covers are moved only via `cover.set_cover_position` with an explicit calibrated percentage — never `open_cover`/`close_cover`. This guarantees physical accuracy regardless of the cover's internal state tracking.
+
+The resolver evaluates the following priority order on every 5-minute poll **and** whenever the lux sensor or sun-at-window sensor changes:
+
+1. **Night window** — if the current time is inside the configured night range, target state is `closed`.
+2. **Sun-at-window** — if the optional sensor is `off`, the resolver does not darken (but may still lighten).
+3. **Lux thresholds** — compares the smoothed lux value against `lux_close` (to darken) and `lux_reopen` (to lighten).
+4. **Dwell lock** — a lightening move is only issued if at least `dwell_minutes` have elapsed since the last move.
+5. **Manual override** — if `switch.<room>_override` is on, no automatic moves are issued until it turns off.
+
+| State | Rank | Description |
+|---|---|---|
+| `open` | 0 | Maximum light (~75 %, calibrated per cover) |
+| `medium` | 1 | Partially closed |
+| `shade` | 2 | Sun-blocking position |
+| `closed` | 3 | Fully dark, 0 % |
+
+Darkening (rank ↑) is immediate. Lightening (rank ↓) requires crossing the `lux_reopen` threshold **and** waiting out the dwell period.
+
+</details>
+
+---
 
 ## Development
 
-```
+```bash
 pip install pytest pytest-asyncio homeassistant
 pytest
 ```
+
+The test suite in `tests/` uses lightweight hand-rolled fakes (`tests/fakes.py`) rather than the full `pytest-homeassistant-custom-component` harness. The resolver unit tests serve as the executable specification for the decision logic.
+
+CI runs HACS validation and hassfest on every push — see `.github/workflows/validate.yml`.
+
+---
+
+## Contributing
+
+Pull requests and issues are welcome. Please open an issue first for larger changes.
+
+[Open an issue](https://github.com/snapicek/home-assistant-blinds/issues)
+
+---
+
+## License
+
+[MIT](LICENSE) © 2026 Snapicek
