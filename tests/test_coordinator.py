@@ -111,8 +111,8 @@ async def test_seasonal_split_changes_thresholds_by_month(monkeypatch):
     room_winter.current_state = SemanticState.MEDIUM
     room_winter.entities["enabled"] = FakeSwitch(True)
     room_winter.entities["seasonal_split"] = FakeSwitch(True)
-    room_winter.entities["summer_lux_factor"] = FakeNumber(1.5)
-    room_winter.entities["winter_lux_factor"] = FakeNumber(0.5)
+    room_winter.entities["summer_lux_factor"] = FakeNumber(150)
+    room_winter.entities["winter_lux_factor"] = FakeNumber(50)
 
     winter_now = datetime(2026, 1, 21, 12, 0)
     coord_winter = _make_coordinator(monkeypatch, hass_winter, room_winter, now=winter_now)
@@ -128,8 +128,8 @@ async def test_seasonal_split_changes_thresholds_by_month(monkeypatch):
     room_summer.current_state = SemanticState.MEDIUM
     room_summer.entities["enabled"] = FakeSwitch(True)
     room_summer.entities["seasonal_split"] = FakeSwitch(True)
-    room_summer.entities["summer_lux_factor"] = FakeNumber(1.5)
-    room_summer.entities["winter_lux_factor"] = FakeNumber(0.5)
+    room_summer.entities["summer_lux_factor"] = FakeNumber(150)
+    room_summer.entities["winter_lux_factor"] = FakeNumber(50)
 
     summer_now = datetime(2026, 7, 21, 12, 0)
     coord_summer = _make_coordinator(monkeypatch, hass_summer, room_summer, now=summer_now)
