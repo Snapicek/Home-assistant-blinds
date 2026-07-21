@@ -1,15 +1,20 @@
 """The Chained Blinds integration."""
 from __future__ import annotations
 
+import logging
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util
 
 from .const import CONF_LEFT_COVER, CONF_LUX_SENSOR, CONF_RIGHT_COVER, CONF_SUN_SENSOR, DOMAIN
 from .coordinator import ChainedBlindsCoordinator
 from .models import RoomRuntimeData
+
+_LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.NUMBER, Platform.SELECT, Platform.SWITCH, Platform.TIME]
 
@@ -53,6 +58,43 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass, tracked_entities, _async_handle_tracked_state_change
         )
     )
+
+    # ------------------------------------------------------------------ #
+    # Manual-move detection: watch the cover entities themselves.
+    # Any position change that arrives more than 30 s after the last
+    # integration-initiated move is treated as a manual move and the
+    # Override switch is activated automatically so the automation does
+    # not immediately undo what the user just did.
+    # ------------------------------------------------------------------ #
+    _MANUAL_MOVE_GRACE_SECONDS = 30
+
+    cover_entities = [room.left_cover]
+    if room.right_cover:
+        cover_entities.append(room.right_cover)
+
+    async def _async_handle_cover_state_change(event) -> None:
+        # Skip if the integration itself triggered the move recently.
+        if room.last_move_time is not None:
+            elapsed = (dt_util.utcnow() - room.last_move_time).total_seconds()
+            if elapsed < _MANUAL_MOVE_GRACE_SECONDS:
+                return
+        # Skip if automation is already paused.
+        override = room.entities.get("override")
+        if override is not None and override.is_on:
+            return
+        # Activate override so the new manual position is held.
+        _LOGGER.info(
+            "%s: manual cover move detected — activating override", room.name
+        )
+        if override is not None:
+            await override.async_turn_on()
+
+    entry.async_on_unload(
+        async_track_state_change_event(
+            hass, cover_entities, _async_handle_cover_state_change
+        )
+    )
+
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     await coordinator.async_config_entry_first_refresh()

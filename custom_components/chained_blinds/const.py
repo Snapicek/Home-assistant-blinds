@@ -67,35 +67,44 @@ class NumberSpec:
     max_value: float
     step: float
     unit: str | None = None
+    icon: str | None = None
 
 
 # Thresholds/dwell/offsets: one instance per room (config entry).
 THRESHOLD_NUMBER_SPECS: tuple[NumberSpec, ...] = (
-    NumberSpec("lux_medium", "Lux threshold: medium", DEFAULT_LUX_MEDIUM, 0, 100000, 1, "lx"),
-    NumberSpec("lux_high", "Lux threshold: shade", DEFAULT_LUX_HIGH, 0, 100000, 1, "lx"),
+    NumberSpec("lux_medium", "Lux threshold: medium", DEFAULT_LUX_MEDIUM, 0, 100000, 1, "lx",
+               icon="mdi:brightness-5"),
+    NumberSpec("lux_high", "Lux threshold: shade", DEFAULT_LUX_HIGH, 0, 100000, 1, "lx",
+               icon="mdi:brightness-7"),
     NumberSpec(
         "lux_medium_reopen", "Lux threshold: reopen to medium",
         DEFAULT_LUX_MEDIUM_REOPEN, 0, 100000, 1, "lx",
+        icon="mdi:brightness-5",
     ),
     NumberSpec(
         "lux_high_reopen", "Lux threshold: reopen to shade",
         DEFAULT_LUX_HIGH_REOPEN, 0, 100000, 1, "lx",
+        icon="mdi:brightness-7",
     ),
     NumberSpec(
         "dwell_minutes", "Dwell before darkening",
         DEFAULT_DWELL_MINUTES, 0, 720, 1, "min",
+        icon="mdi:timer-outline",
     ),
     NumberSpec(
         "reopen_dwell_minutes", "Dwell before lightening",
         DEFAULT_REOPEN_DWELL_MINUTES, 0, 720, 1, "min",
+        icon="mdi:timer-outline",
     ),
     NumberSpec(
         "sunset_offset_minutes", "Sunset offset",
         DEFAULT_SUNSET_OFFSET_MINUTES, -180, 180, 1, "min",
+        icon="mdi:weather-sunset",
     ),
     NumberSpec(
         "override_duration_minutes", "Override duration",
         DEFAULT_OVERRIDE_DURATION_MINUTES, 1, 1440, 1, "min",
+        icon="mdi:timer-lock-outline",
     ),
 )
 
@@ -111,6 +120,7 @@ def calibration_number_specs(role: str) -> tuple[NumberSpec, ...]:
             max_value=100,
             step=1,
             unit="%",
+            icon="mdi:blinds-horizontal",
         )
         for state in SemanticState
     )

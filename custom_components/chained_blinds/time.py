@@ -24,6 +24,7 @@ async def async_setup_entry(
 class OpenTimeEntity(TimeEntity, RestoreEntity):
     _attr_has_entity_name = True
     _attr_name = "Open time"
+    _attr_icon = "mdi:clock-start"
 
     def __init__(self, room: RoomRuntimeData) -> None:
         self._room = room

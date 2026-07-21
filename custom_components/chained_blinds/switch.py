@@ -63,6 +63,7 @@ class EnabledSwitch(_RoomSwitchBase):
 
     def __init__(self, room: RoomRuntimeData) -> None:
         super().__init__(room, "enabled", "Enabled", True)
+        self._attr_icon = "mdi:auto-mode"
 
 
 class OverrideSwitch(_RoomSwitchBase):
@@ -70,6 +71,7 @@ class OverrideSwitch(_RoomSwitchBase):
 
     def __init__(self, hass: HomeAssistant, room: RoomRuntimeData) -> None:
         super().__init__(room, "override", "Override", False)
+        self._attr_icon = "mdi:hand-back-right"
         self._hass = hass
         self._unsub_expiry: CALLBACK_TYPE | None = None
 

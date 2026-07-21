@@ -41,6 +41,8 @@ class ChainedBlindsNumber(NumberEntity, RestoreEntity):
         self._attr_native_step = spec.step
         self._attr_native_unit_of_measurement = spec.unit
         self._attr_native_value = spec.default
+        if spec.icon:
+            self._attr_icon = spec.icon
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, room.entry_id)}, name=room.name
         )

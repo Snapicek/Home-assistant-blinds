@@ -63,7 +63,7 @@ class ChainedBlindsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> "ChainedBlindsOptionsFlow":
-        return ChainedBlindsOptionsFlow(config_entry)
+        return ChainedBlindsOptionsFlow()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -85,8 +85,6 @@ class ChainedBlindsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class ChainedBlindsOptionsFlow(config_entries.OptionsFlow):
     """Let the user re-point a room's covers/sensors after setup."""
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
