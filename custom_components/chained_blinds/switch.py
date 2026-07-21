@@ -12,7 +12,7 @@ from datetime import timedelta
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -77,7 +77,7 @@ class EnabledSwitch(_RoomSwitchBase):
     """Master enable: off means the automatic resolver never moves the covers."""
 
     def __init__(self, room: RoomRuntimeData) -> None:
-        super().__init__(room, "enabled", "Enabled", True)
+        super().__init__(room, "enabled", "Automation enabled", True)
         self._attr_icon = "mdi:auto-mode"
 
 
@@ -85,23 +85,25 @@ class SeasonalSplitSwitch(_RoomSwitchBase):
     """Enable summer/winter factors for lux thresholds."""
 
     def __init__(self, room: RoomRuntimeData) -> None:
-        super().__init__(room, "seasonal_split", "Seasonal lux split", DEFAULT_SEASONAL_SPLIT)
+        super().__init__(room, "seasonal_split", "Use seasonal light sensitivity", DEFAULT_SEASONAL_SPLIT)
         self._attr_icon = "mdi:weather-partly-snowy-rainy"
+        self._attr_entity_category = EntityCategory.CONFIG
 
 
 class SunriseOpenSwitch(_RoomSwitchBase):
     """Use sunrise(+offset) as the morning open boundary instead of fixed time."""
 
     def __init__(self, room: RoomRuntimeData) -> None:
-        super().__init__(room, "sunrise_open", "Use sunrise for open time", DEFAULT_USE_SUNRISE_OPEN)
+        super().__init__(room, "sunrise_open", "Use sunrise for morning opening", DEFAULT_USE_SUNRISE_OPEN)
         self._attr_icon = "mdi:weather-sunset-up"
+        self._attr_entity_category = EntityCategory.CONFIG
 
 
 class OverrideSwitch(_RoomSwitchBase):
     """On means "hold current position" -- checked first, before anything else."""
 
     def __init__(self, hass: HomeAssistant, room: RoomRuntimeData) -> None:
-        super().__init__(room, "override", "Override", False)
+        super().__init__(room, "override", "Pause automation", False)
         self._attr_icon = "mdi:hand-back-right"
         self._hass = hass
         self._unsub_expiry: CALLBACK_TYPE | None = None

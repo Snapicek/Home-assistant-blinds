@@ -84,19 +84,41 @@ Each semantic state maps to a raw cover position (0–100 %). After setup, open 
 
 All changes take effect on the next evaluation cycle — no restart or reload needed.
 
-### Threshold & timing entities
+### Device entities
+
+Action entities are intended for daily control and should stay visible on the
+main device view.
 
 | Entity | Purpose |
 |---|---|
-| `number.<room>_lux_close` | Lux level that triggers darkening |
-| `number.<room>_lux_reopen` | Lower lux level required to lighten (hysteresis) |
-| `number.<room>_dwell_minutes` | Minimum minutes to wait before lightening |
-| `number.<room>_override_duration_minutes` | How long the manual override holds |
-| `number.<room>_sunset_offset_minutes` | Shift the effective sunset time |
-| `time.<room>_night_start` / `time.<room>_night_end` | Night window — blinds stay closed |
-| `switch.<room>_enabled` | Master on/off for automatic control |
-| `switch.<room>_override` | Pause automation; auto-clears after the override duration |
-| `select.<room>_state` | Manually set the current semantic state |
+| `switch.<room>_enabled` | Turn automatic blind control on or off |
+| `switch.<room>_override` | Temporarily pause automation while keeping the current blind position |
+| `select.<room>_state` | Manually move blinds to `open`, `medium`, `shade`, or `closed` |
+| `time.<room>_open_time` | Set the daily morning time when daytime behavior may resume |
+
+Settings entities are maintenance/configuration controls and are best kept in
+the device Settings section.
+
+| Entity | Purpose |
+|---|---|
+| `number.<room>_lux_medium` | Brightness level that starts moving toward medium shade |
+| `number.<room>_lux_high` | Brightness level that starts moving toward full shade |
+| `number.<room>_lux_medium_reopen` | Lower brightness needed before moving back toward medium |
+| `number.<room>_lux_high_reopen` | Lower brightness needed before moving back from full shade |
+| `number.<room>_dwell_minutes` | Minimum delay before another darkening move |
+| `number.<room>_reopen_dwell_minutes` | Minimum delay before another opening move |
+| `number.<room>_sunset_offset_minutes` | Shift computed sunset earlier/later |
+| `number.<room>_sunrise_offset_minutes` | Shift computed sunrise earlier/later |
+| `number.<room>_summer_lux_factor` | Seasonal multiplier for summer brightness response |
+| `number.<room>_winter_lux_factor` | Seasonal multiplier for winter brightness response |
+| `number.<room>_override_duration_minutes` | How long pause automation stays active before auto-clear |
+| `number.<room>_<left/right>_<state>_pos` | Per-cover calibration percentage for each semantic state |
+| `switch.<room>_seasonal_split` | Enable separate summer/winter sensitivity multipliers |
+| `switch.<room>_sunrise_open` | Use sunrise (plus offset) as morning opening boundary |
+
+Most number entities display as whole numbers to reduce visual noise (for
+example `12000 lx` instead of `12000.0 lx`). Seasonal sensitivity factors keep
+decimal precision because they intentionally support fine-grained tuning.
 
 ---
 

@@ -8,6 +8,8 @@ are impractical with the lightweight fakes used elsewhere in this test
 suite (see tests/fakes.py). Full entity-lifecycle coverage is follow-up work
 via pytest-homeassistant-custom-component.
 """
+from homeassistant.helpers.entity import EntityCategory
+
 from custom_components.chained_blinds.const import DOMAIN, THRESHOLD_NUMBER_SPECS
 from custom_components.chained_blinds.number import ChainedBlindsNumber
 from custom_components.chained_blinds.select import ChainedBlindsStateSelect
@@ -90,6 +92,14 @@ def test_number_entity_icon_is_set_from_spec():
     assert entity.icon == spec.icon
 
 
+def test_number_entity_uses_spec_entity_category_and_precision():
+    room = make_room()
+    spec = THRESHOLD_NUMBER_SPECS[0]  # lux_medium
+    entity = ChainedBlindsNumber(room, spec)
+    assert entity.entity_category == EntityCategory.CONFIG
+    assert entity.suggested_display_precision == 0
+
+
 def test_enabled_switch_has_correct_icon():
     room = make_room()
     entity = EnabledSwitch(room)
@@ -106,6 +116,12 @@ def test_sunrise_open_switch_has_correct_icon():
     room = make_room()
     entity = SunriseOpenSwitch(room)
     assert entity.icon == "mdi:weather-sunset-up"
+
+
+def test_maintenance_switches_are_configuration_entities():
+    room = make_room()
+    assert SeasonalSplitSwitch(room).entity_category == EntityCategory.CONFIG
+    assert SunriseOpenSwitch(room).entity_category == EntityCategory.CONFIG
 
 
 def test_state_select_has_correct_icon():

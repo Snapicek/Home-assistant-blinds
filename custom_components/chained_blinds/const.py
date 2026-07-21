@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from datetime import time as dt_time, timedelta
 from enum import StrEnum
 
+from homeassistant.helpers.entity import EntityCategory
+
 DOMAIN = "chained_blinds"
 
 EVAL_INTERVAL = timedelta(minutes=5)
@@ -83,58 +85,130 @@ class NumberSpec:
     step: float
     unit: str | None = None
     icon: str | None = None
+    suggested_display_precision: int | None = None
+    entity_category: EntityCategory | None = EntityCategory.CONFIG
 
 
 # Thresholds/dwell/offsets: one instance per room (config entry).
 THRESHOLD_NUMBER_SPECS: tuple[NumberSpec, ...] = (
-    NumberSpec("lux_medium", "Lux threshold: medium", DEFAULT_LUX_MEDIUM, 0, 100000, 100, "lx",
-               icon="mdi:brightness-5"),
-    NumberSpec("lux_high", "Lux threshold: shade", DEFAULT_LUX_HIGH, 0, 100000, 100, "lx",
-               icon="mdi:brightness-7"),
     NumberSpec(
-        "lux_medium_reopen", "Lux threshold: reopen to medium",
-        DEFAULT_LUX_MEDIUM_REOPEN, 0, 100000, 100, "lx",
+        "lux_medium",
+        "Brightness for medium shade",
+        DEFAULT_LUX_MEDIUM,
+        0,
+        100000,
+        100,
+        "lx",
         icon="mdi:brightness-5",
+        suggested_display_precision=0,
     ),
     NumberSpec(
-        "lux_high_reopen", "Lux threshold: reopen to shade",
-        DEFAULT_LUX_HIGH_REOPEN, 0, 100000, 100, "lx",
+        "lux_high",
+        "Brightness for full shade",
+        DEFAULT_LUX_HIGH,
+        0,
+        100000,
+        100,
+        "lx",
         icon="mdi:brightness-7",
+        suggested_display_precision=0,
     ),
     NumberSpec(
-        "dwell_minutes", "Dwell before darkening",
-        DEFAULT_DWELL_MINUTES, 0, 720, 1, "min",
+        "lux_medium_reopen",
+        "Brightness to return to medium shade",
+        DEFAULT_LUX_MEDIUM_REOPEN,
+        0,
+        100000,
+        100,
+        "lx",
+        icon="mdi:brightness-5",
+        suggested_display_precision=0,
+    ),
+    NumberSpec(
+        "lux_high_reopen",
+        "Brightness to return to full shade",
+        DEFAULT_LUX_HIGH_REOPEN,
+        0,
+        100000,
+        100,
+        "lx",
+        icon="mdi:brightness-7",
+        suggested_display_precision=0,
+    ),
+    NumberSpec(
+        "dwell_minutes",
+        "Delay before closing more",
+        DEFAULT_DWELL_MINUTES,
+        0,
+        720,
+        1,
+        "min",
         icon="mdi:timer-outline",
+        suggested_display_precision=0,
     ),
     NumberSpec(
-        "reopen_dwell_minutes", "Dwell before lightening",
-        DEFAULT_REOPEN_DWELL_MINUTES, 0, 720, 1, "min",
+        "reopen_dwell_minutes",
+        "Delay before opening more",
+        DEFAULT_REOPEN_DWELL_MINUTES,
+        0,
+        720,
+        1,
+        "min",
         icon="mdi:timer-outline",
+        suggested_display_precision=0,
     ),
     NumberSpec(
-        "sunset_offset_minutes", "Sunset offset",
-        DEFAULT_SUNSET_OFFSET_MINUTES, -180, 180, 1, "min",
+        "sunset_offset_minutes",
+        "Sunset time adjustment",
+        DEFAULT_SUNSET_OFFSET_MINUTES,
+        -180,
+        180,
+        1,
+        "min",
         icon="mdi:weather-sunset",
+        suggested_display_precision=0,
     ),
     NumberSpec(
-        "sunrise_offset_minutes", "Sunrise offset",
-        DEFAULT_SUNRISE_OFFSET_MINUTES, -180, 180, 1, "min",
+        "sunrise_offset_minutes",
+        "Sunrise time adjustment",
+        DEFAULT_SUNRISE_OFFSET_MINUTES,
+        -180,
+        180,
+        1,
+        "min",
         icon="mdi:weather-sunset-up",
+        suggested_display_precision=0,
     ),
     NumberSpec(
-        "summer_lux_factor", "Summer lux factor",
-        DEFAULT_SUMMER_LUX_FACTOR, 0.2, 3.0, 0.05,
+        "summer_lux_factor",
+        "Summer light sensitivity factor",
+        DEFAULT_SUMMER_LUX_FACTOR,
+        0.2,
+        3.0,
+        0.05,
         icon="mdi:weather-sunny",
+        suggested_display_precision=2,
     ),
     NumberSpec(
-        "winter_lux_factor", "Winter lux factor",
-        DEFAULT_WINTER_LUX_FACTOR, 0.2, 3.0, 0.05,
+        "winter_lux_factor",
+        "Winter light sensitivity factor",
+        DEFAULT_WINTER_LUX_FACTOR,
+        0.2,
+        3.0,
+        0.05,
         icon="mdi:weather-snowy",
+        suggested_display_precision=2,
     ),
     NumberSpec(
-        "override_duration_minutes", "Override duration",
-        DEFAULT_OVERRIDE_DURATION_MINUTES, 1, 1440, 1, "min",
+        "override_duration_minutes",
+        "Manual hold duration",
+        DEFAULT_OVERRIDE_DURATION_MINUTES,
+        1,
+        1440,
+        1,
+        "min",
         icon="mdi:timer-lock-outline",
+        suggested_display_precision=0,
     ),
 )
 
@@ -144,13 +218,14 @@ def calibration_number_specs(role: str) -> tuple[NumberSpec, ...]:
     return tuple(
         NumberSpec(
             key=f"{role}_{state.value}_pos",
-            name=f"{role.capitalize()} cover: {state.value} position",
+            name=f"{role.capitalize()} cover {state.value.capitalize()} position",
             default=DEFAULT_CALIBRATION[state],
             min_value=0,
             max_value=100,
             step=1,
             unit="%",
             icon="mdi:blinds-horizontal",
+            suggested_display_precision=0,
         )
         for state in SemanticState
     )

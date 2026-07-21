@@ -30,7 +30,7 @@ class ChainedBlindsStateSelect(SelectEntity, RestoreEntity):
     """
 
     _attr_has_entity_name = True
-    _attr_name = "State"
+    _attr_name = "Blind position mode"
     _attr_icon = "mdi:blinds"
     _attr_options = [state.value for state in SemanticState]
 

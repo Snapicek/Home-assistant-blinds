@@ -36,11 +36,14 @@ class ChainedBlindsNumber(NumberEntity, RestoreEntity):
         self._spec = spec
         self._attr_unique_id = f"{room.entry_id}_{spec.key}"
         self._attr_name = spec.name
+        self._attr_entity_category = spec.entity_category
         self._attr_native_min_value = spec.min_value
         self._attr_native_max_value = spec.max_value
         self._attr_native_step = spec.step
         self._attr_native_unit_of_measurement = spec.unit
         self._attr_native_value = spec.default
+        if spec.suggested_display_precision is not None:
+            self._attr_suggested_display_precision = spec.suggested_display_precision
         if spec.icon:
             self._attr_icon = spec.icon
         self._attr_device_info = DeviceInfo(
