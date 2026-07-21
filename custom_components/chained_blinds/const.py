@@ -67,6 +67,8 @@ DEFAULT_OVERRIDE_DURATION_MINUTES = 60.0
 DEFAULT_OPEN_TIME = dt_time(7, 0)
 DEFAULT_SUMMER_LUX_FACTOR = 1.15
 DEFAULT_WINTER_LUX_FACTOR = 0.85
+DEFAULT_SUMMER_LUX_FACTOR_PERCENT = 115
+DEFAULT_WINTER_LUX_FACTOR_PERCENT = 85
 DEFAULT_SEASONAL_SPLIT = False
 DEFAULT_USE_SUNRISE_OPEN = False
 
@@ -93,7 +95,7 @@ class NumberSpec:
 THRESHOLD_NUMBER_SPECS: tuple[NumberSpec, ...] = (
     NumberSpec(
         "lux_medium",
-        "Brightness for medium shade",
+        "Close to medium (lux)",
         DEFAULT_LUX_MEDIUM,
         0,
         100000,
@@ -104,7 +106,7 @@ THRESHOLD_NUMBER_SPECS: tuple[NumberSpec, ...] = (
     ),
     NumberSpec(
         "lux_high",
-        "Brightness for full shade",
+        "Close to shade (lux)",
         DEFAULT_LUX_HIGH,
         0,
         100000,
@@ -115,7 +117,7 @@ THRESHOLD_NUMBER_SPECS: tuple[NumberSpec, ...] = (
     ),
     NumberSpec(
         "lux_medium_reopen",
-        "Brightness to return to medium shade",
+        "Reopen from medium (lux)",
         DEFAULT_LUX_MEDIUM_REOPEN,
         0,
         100000,
@@ -126,7 +128,7 @@ THRESHOLD_NUMBER_SPECS: tuple[NumberSpec, ...] = (
     ),
     NumberSpec(
         "lux_high_reopen",
-        "Brightness to return to full shade",
+        "Reopen from shade (lux)",
         DEFAULT_LUX_HIGH_REOPEN,
         0,
         100000,
@@ -137,7 +139,7 @@ THRESHOLD_NUMBER_SPECS: tuple[NumberSpec, ...] = (
     ),
     NumberSpec(
         "dwell_minutes",
-        "Delay before closing more",
+        "Close delay",
         DEFAULT_DWELL_MINUTES,
         0,
         720,
@@ -148,7 +150,7 @@ THRESHOLD_NUMBER_SPECS: tuple[NumberSpec, ...] = (
     ),
     NumberSpec(
         "reopen_dwell_minutes",
-        "Delay before opening more",
+        "Open delay",
         DEFAULT_REOPEN_DWELL_MINUTES,
         0,
         720,
@@ -159,7 +161,7 @@ THRESHOLD_NUMBER_SPECS: tuple[NumberSpec, ...] = (
     ),
     NumberSpec(
         "sunset_offset_minutes",
-        "Sunset time adjustment",
+        "Sunset offset",
         DEFAULT_SUNSET_OFFSET_MINUTES,
         -180,
         180,
@@ -170,7 +172,7 @@ THRESHOLD_NUMBER_SPECS: tuple[NumberSpec, ...] = (
     ),
     NumberSpec(
         "sunrise_offset_minutes",
-        "Sunrise time adjustment",
+        "Sunrise offset",
         DEFAULT_SUNRISE_OFFSET_MINUTES,
         -180,
         180,
@@ -181,27 +183,29 @@ THRESHOLD_NUMBER_SPECS: tuple[NumberSpec, ...] = (
     ),
     NumberSpec(
         "summer_lux_factor",
-        "Summer light sensitivity factor",
-        DEFAULT_SUMMER_LUX_FACTOR,
-        0.2,
-        3.0,
-        0.05,
+        "Summer sensitivity",
+        DEFAULT_SUMMER_LUX_FACTOR_PERCENT,
+        20,
+        300,
+        1,
+        "%",
         icon="mdi:weather-sunny",
-        suggested_display_precision=2,
+        suggested_display_precision=0,
     ),
     NumberSpec(
         "winter_lux_factor",
-        "Winter light sensitivity factor",
-        DEFAULT_WINTER_LUX_FACTOR,
-        0.2,
-        3.0,
-        0.05,
+        "Winter sensitivity",
+        DEFAULT_WINTER_LUX_FACTOR_PERCENT,
+        20,
+        300,
+        1,
+        "%",
         icon="mdi:weather-snowy",
-        suggested_display_precision=2,
+        suggested_display_precision=0,
     ),
     NumberSpec(
         "override_duration_minutes",
-        "Manual hold duration",
+        "Pause duration",
         DEFAULT_OVERRIDE_DURATION_MINUTES,
         1,
         1440,
@@ -218,7 +222,7 @@ def calibration_number_specs(role: str) -> tuple[NumberSpec, ...]:
     return tuple(
         NumberSpec(
             key=f"{role}_{state.value}_pos",
-            name=f"{role.capitalize()} cover {state.value.capitalize()} position",
+            name=f"{role.capitalize()} {state.value.capitalize()} position",
             default=DEFAULT_CALIBRATION[state],
             min_value=0,
             max_value=100,

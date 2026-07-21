@@ -23,11 +23,11 @@ from .const import (
     DEFAULT_OPEN_TIME,
     DEFAULT_REOPEN_DWELL_MINUTES,
     DEFAULT_SEASONAL_SPLIT,
-    DEFAULT_SUMMER_LUX_FACTOR,
+    DEFAULT_SUMMER_LUX_FACTOR_PERCENT,
     DEFAULT_SUNSET_OFFSET_MINUTES,
     DEFAULT_SUNRISE_OFFSET_MINUTES,
     DEFAULT_USE_SUNRISE_OPEN,
-    DEFAULT_WINTER_LUX_FACTOR,
+    DEFAULT_WINTER_LUX_FACTOR_PERCENT,
     EVAL_INTERVAL,
     SemanticState,
 )
@@ -88,8 +88,8 @@ class ChainedBlindsCoordinator(DataUpdateCoordinator[dict]):
     def _season_factor(self, now: datetime) -> float:
         # Apr-Sep are treated as the sunny season; Oct-Mar as winter season.
         if 4 <= now.month <= 9:
-            return _num(self.room, "summer_lux_factor", DEFAULT_SUMMER_LUX_FACTOR)
-        return _num(self.room, "winter_lux_factor", DEFAULT_WINTER_LUX_FACTOR)
+            return _num(self.room, "summer_lux_factor", DEFAULT_SUMMER_LUX_FACTOR_PERCENT) / 100.0
+        return _num(self.room, "winter_lux_factor", DEFAULT_WINTER_LUX_FACTOR_PERCENT) / 100.0
 
     async def _async_update_data(self) -> dict:
         room = self.room
