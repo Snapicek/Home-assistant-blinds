@@ -32,9 +32,9 @@ class RoomRuntimeData:
     last_move_time: datetime | None = None
     ramp_target_state: SemanticState | None = None
 
-    # Populated by the number/select/switch/time platforms during
-    # async_setup_entry so the coordinator can read live values directly off
-    # the entity objects instead of round-tripping through entity_ids.
+    # Populated by the switch/select platforms during async_setup_entry so the
+    # coordinator can read the operational entities (enabled, override,
+    # state_select) directly. All tuning now lives on config_entry, not here.
     entities: dict[str, Any] = field(default_factory=dict)
 
     coordinator: "ChainedBlindsCoordinator | None" = None

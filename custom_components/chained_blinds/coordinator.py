@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, time as dt_time, timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -70,6 +70,22 @@ def _get_config_value(
     return config.get(key, default)
 
 
+def _as_time(value: object, default: dt_time) -> dt_time:
+    """Coerce a config open-time value to datetime.time.
+
+    HA's TimeSelector persists times as ISO strings ("HH:MM:SS"), while tests
+    (and restored defaults) may supply a datetime.time directly. Accept both.
+    """
+    if isinstance(value, dt_time):
+        return value
+    if isinstance(value, str):
+        try:
+            return dt_time.fromisoformat(value)
+        except ValueError:
+            return default
+    return default
+
+
 class ChainedBlindsCoordinator(DataUpdateCoordinator[dict]):
     """Runs one full evaluate-and-move cycle for a single room."""
 
@@ -130,8 +146,14 @@ class ChainedBlindsCoordinator(DataUpdateCoordinator[dict]):
 
         now = dt_util.now()
 
-        open_time = _get_config_value(self.hass, self._config_entry, CONF_OPEN_TIME, DEFAULT_OPEN_TIME)
-        non_workday_open_time = _get_config_value(self.hass, self._config_entry, CONF_NON_WORKDAY_OPEN_TIME, DEFAULT_NON_WORKDAY_OPEN_TIME)
+        open_time = _as_time(
+            _get_config_value(self.hass, self._config_entry, CONF_OPEN_TIME, DEFAULT_OPEN_TIME),
+            DEFAULT_OPEN_TIME,
+        )
+        non_workday_open_time = _as_time(
+            _get_config_value(self.hass, self._config_entry, CONF_NON_WORKDAY_OPEN_TIME, DEFAULT_NON_WORKDAY_OPEN_TIME),
+            DEFAULT_NON_WORKDAY_OPEN_TIME,
+        )
 
         workday_state = self.hass.states.get(WORKDAY_SENSOR_ENTITY_ID)
         is_workday = workday_state is None or workday_state.state != "off"

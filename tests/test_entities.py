@@ -1,39 +1,22 @@
-"""Construction/attribute-wiring tests for the number/select/switch/time
-entity classes.
+"""Construction/attribute-wiring tests for the surviving entity classes.
 
-These only exercise the plain constructors (spec -> entity attributes,
-unique_id, DeviceInfo) -- not `async_added_to_hass`/RestoreEntity lifecycle
-or `async_write_ha_state`, both of which require a real attached `hass` and
-are impractical with the lightweight fakes used elsewhere in this test
-suite (see tests/fakes.py). Full entity-lifecycle coverage is follow-up work
-via pytest-homeassistant-custom-component.
+After moving all tuning into the config flow, the only entities this
+integration still creates are operational: the enable switch, the pause
+(override) switch, and the semantic-state select. The number/time platforms
+and the seasonal/sunrise/ramp config switches were removed.
+
+These only exercise the plain constructors (attributes, unique_id,
+DeviceInfo) -- not `async_added_to_hass`/RestoreEntity lifecycle, which
+requires a real attached `hass` and is impractical with the lightweight
+fakes used elsewhere in this suite (see tests/fakes.py). Full
+entity-lifecycle coverage is follow-up work via
+pytest-homeassistant-custom-component.
 """
-from homeassistant.helpers.entity import EntityCategory
-
-from custom_components.chained_blinds.const import DOMAIN, THRESHOLD_NUMBER_SPECS
-from custom_components.chained_blinds.number import ChainedBlindsNumber
+from custom_components.chained_blinds.const import DOMAIN
 from custom_components.chained_blinds.select import ChainedBlindsStateSelect
-from custom_components.chained_blinds.switch import (
-    EnabledSwitch,
-    OverrideSwitch,
-)
-from custom_components.chained_blinds.time import NonWorkdayOpenTimeEntity, OpenTimeEntity
+from custom_components.chained_blinds.switch import EnabledSwitch, OverrideSwitch
 
-from .fakes import disable_ha_state_writes, make_room
-
-
-def test_number_entity_wires_spec_onto_attributes():
-    room = make_room()
-    spec = THRESHOLD_NUMBER_SPECS[0]  # lux_medium
-
-    entity = ChainedBlindsNumber(room, spec)
-
-    assert entity.unique_id == f"{room.entry_id}_{spec.key}"
-    assert entity.native_value == spec.default
-    assert isinstance(entity.native_value, int)
-    assert entity.native_min_value == spec.min_value
-    assert entity.native_max_value == spec.max_value
-    assert entity.device_info["identifiers"] == {(DOMAIN, room.entry_id)}
+from .fakes import make_room
 
 
 def test_select_entity_defaults_options_and_unique_id():
@@ -45,11 +28,31 @@ def test_select_entity_defaults_options_and_unique_id():
     assert set(entity.options) == {"open", "medium", "shade", "closed"}
 
 
+def test_select_entity_device_info_identifiers():
+    room = make_room()
+
+    entity = ChainedBlindsStateSelect(room)
+
+    assert entity.device_info["identifiers"] == {(DOMAIN, room.entry_id)}
+
+
+def test_state_select_has_correct_icon():
+    room = make_room()
+    entity = ChainedBlindsStateSelect(room)
+    assert entity.icon == "mdi:blinds"
+
+
 def test_enabled_switch_defaults_on():
     room = make_room()
     entity = EnabledSwitch(room)
     assert entity.is_on is True
     assert entity.unique_id == f"{room.entry_id}_enabled"
+
+
+def test_enabled_switch_has_correct_icon():
+    room = make_room()
+    entity = EnabledSwitch(room)
+    assert entity.icon == "mdi:auto-mode"
 
 
 def test_override_switch_defaults_off():
@@ -61,100 +64,9 @@ def test_override_switch_defaults_off():
     assert entity.unique_id == f"{room.entry_id}_override"
 
 
-def test_open_time_entity_defaults():
-    from datetime import time
+def test_override_switch_has_correct_icon():
+    from .fakes import FakeConfigEntry, FakeHass
 
     room = make_room()
-    entity = OpenTimeEntity(room)
-    assert entity.native_value == time(7, 0)
-    assert entity.unique_id == f"{room.entry_id}_open_time"
-
-
-def test_non_workday_open_time_entity_defaults():
-    from datetime import time
-
-    room = make_room()
-    entity = NonWorkdayOpenTimeEntity(room)
-    assert entity.native_value == time(9, 30)
-    assert entity.unique_id == f"{room.entry_id}_non_workday_open_time"
-
-
-def test_number_entity_icon_is_set_from_spec():
-    room = make_room()
-    spec = THRESHOLD_NUMBER_SPECS[0]  # lux_medium
-    entity = ChainedBlindsNumber(room, spec)
-    assert entity.icon == spec.icon
-
-
-def test_number_entity_uses_spec_entity_category_and_precision():
-    room = make_room()
-    spec = THRESHOLD_NUMBER_SPECS[0]  # lux_medium
-    entity = ChainedBlindsNumber(room, spec)
-    assert entity.entity_category == EntityCategory.CONFIG
-    assert getattr(entity, "_attr_suggested_display_precision", None) == 0
-
-
-async def test_number_entity_rounds_values_for_integer_precision_spec():
-    room = make_room()
-    spec = THRESHOLD_NUMBER_SPECS[0]  # lux_medium
-    entity = ChainedBlindsNumber(room, spec)
-    disable_ha_state_writes(entity)
-    await entity.async_set_native_value(1234.7)
-    assert entity.native_value == 1235
-    assert isinstance(entity.native_value, int)
-
-
-async def test_number_entity_resets_to_default_when_restored_value_is_out_of_range():
-    """Persisted float-scale values (e.g. 1.15 from before unit change to %)
-    must not survive restore if they fall outside the current [min, max] range."""
-    from custom_components.chained_blinds.const import THRESHOLD_NUMBER_SPECS as SPECS
-
-    # Find summer_lux_factor spec (range 20–300, default 115)
-    spec = next(s for s in SPECS if s.key == "summer_lux_factor")
-    room = make_room()
-    entity = ChainedBlindsNumber(room, spec)
-
-    # Simulate RestoreEntity returning an old float-factor value (1.15)
-    class _FakeLastState:
-        state = "1.15"
-        attributes = {}
-
-    async def _fake_async_get_last_state():
-        return _FakeLastState()
-
-    entity.async_get_last_state = _fake_async_get_last_state  # type: ignore[assignment]
-    entity.async_write_ha_state = lambda: None
-
-    await entity.async_added_to_hass()
-
-    # 1.15 rounds to 1, which is below min_value=20 → must fall back to default 115
-    assert entity.native_value == 115
-
-
-def test_enabled_switch_has_correct_icon():
-    room = make_room()
-    entity = EnabledSwitch(room)
-    assert entity.icon == "mdi:auto-mode"
-
-
-
-def test_state_select_has_correct_icon():
-    room = make_room()
-    entity = ChainedBlindsStateSelect(room)
-    assert entity.icon == "mdi:blinds"
-
-
-def test_threshold_number_specs_include_seasonal_and_sunrise_entries():
-    keys = [s.key for s in THRESHOLD_NUMBER_SPECS]
-    assert "summer_lux_factor" in keys
-    assert "winter_lux_factor" in keys
-    assert "ramp_step_percent" in keys
-    assert "ramp_interval_minutes" in keys
-    assert "sunrise_offset_minutes" in keys
-    assert "sunset_offset_minutes" in keys
-    assert "override_duration_minutes" in keys
-
-
-def test_all_threshold_number_specs_have_icons():
-    for spec in THRESHOLD_NUMBER_SPECS:
-        assert spec.icon is not None, f"{spec.key} is missing an icon"
+    entity = OverrideSwitch(FakeHass(), room, FakeConfigEntry())
+    assert entity.icon == "mdi:hand-back-right"

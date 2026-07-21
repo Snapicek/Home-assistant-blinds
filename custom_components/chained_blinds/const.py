@@ -1,11 +1,9 @@
 """Constants for the Chained Blinds integration."""
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import time as dt_time, timedelta
 from enum import StrEnum
 
-from homeassistant.helpers.entity import EntityCategory
 
 DOMAIN = "chained_blinds"
 
@@ -55,7 +53,8 @@ CONF_OPEN_TIME = "open_time"
 CONF_NON_WORKDAY_OPEN_TIME = "non_workday_open_time"
 
 # Default calibrated raw positions (%), per semantic state. Must be tuned
-# per physical cover — these are just seed values for the number entities.
+# per physical cover — these are just seed values for the config-flow
+# calibration step.
 DEFAULT_CALIBRATION: dict[SemanticState, float] = {
     SemanticState.OPEN: 75.0,
     SemanticState.MEDIUM: 50.0,
@@ -99,192 +98,3 @@ WORKDAY_SENSOR_ENTITY_ID = "binary_sensor.workday_sensor"
 
 COVER_ROLES = ("left", "right")
 
-
-def calibration_config_keys(role: str) -> tuple[str, ...]:
-    """Per-cover-per-state calibration config keys, e.g. left_open_pos, left_medium_pos, etc."""
-    return tuple(
-        f"{role}_{state.value}_pos"
-        for state in SemanticState
-    )
-
-
-@dataclass(frozen=True)
-class NumberSpec:
-    """Describes one live-tunable `number` entity this integration creates."""
-
-    key: str
-    name: str
-    default: float
-    min_value: float
-    max_value: float
-    step: float
-    unit: str | None = None
-    icon: str | None = None
-    suggested_display_precision: int | None = None
-    entity_category: EntityCategory | None = EntityCategory.CONFIG
-
-
-# Thresholds/dwell/offsets: one instance per room (config entry).
-THRESHOLD_NUMBER_SPECS: tuple[NumberSpec, ...] = (
-    NumberSpec(
-        "lux_medium",
-        "Close to medium (lux)",
-        DEFAULT_LUX_MEDIUM,
-        0,
-        100000,
-        100,
-        "lx",
-        icon="mdi:brightness-5",
-        suggested_display_precision=0,
-    ),
-    NumberSpec(
-        "lux_medium_reopen",
-        "Reopen from medium (lux)",
-        DEFAULT_LUX_MEDIUM_REOPEN,
-        0,
-        100000,
-        100,
-        "lx",
-        icon="mdi:brightness-5",
-        suggested_display_precision=0,
-    ),
-    NumberSpec(
-        "lux_high",
-        "Close to shade (lux)",
-        DEFAULT_LUX_HIGH,
-        0,
-        100000,
-        100,
-        "lx",
-        icon="mdi:brightness-7",
-        suggested_display_precision=0,
-    ),
-    NumberSpec(
-        "lux_high_reopen",
-        "Reopen from shade (lux)",
-        DEFAULT_LUX_HIGH_REOPEN,
-        0,
-        100000,
-        100,
-        "lx",
-        icon="mdi:brightness-7",
-        suggested_display_precision=0,
-    ),
-    NumberSpec(
-        "dwell_minutes",
-        "Close delay",
-        DEFAULT_DWELL_MINUTES,
-        0,
-        720,
-        1,
-        "min",
-        icon="mdi:timer-outline",
-        suggested_display_precision=0,
-    ),
-    NumberSpec(
-        "reopen_dwell_minutes",
-        "Open delay",
-        DEFAULT_REOPEN_DWELL_MINUTES,
-        0,
-        720,
-        1,
-        "min",
-        icon="mdi:timer-outline",
-        suggested_display_precision=0,
-    ),
-    NumberSpec(
-        "override_duration_minutes",
-        "Pause duration",
-        DEFAULT_OVERRIDE_DURATION_MINUTES,
-        1,
-        1440,
-        1,
-        "min",
-        icon="mdi:timer-lock-outline",
-        suggested_display_precision=0,
-    ),
-    NumberSpec(
-        "ramp_step_percent",
-        "Gradual step size",
-        DEFAULT_RAMP_STEP_PERCENT,
-        5,
-        100,
-        5,
-        "%",
-        icon="mdi:stairs",
-        suggested_display_precision=0,
-    ),
-    NumberSpec(
-        "ramp_interval_minutes",
-        "Step interval",
-        DEFAULT_RAMP_INTERVAL_MINUTES,
-        1,
-        30,
-        1,
-        "min",
-        icon="mdi:timer-cog-outline",
-        suggested_display_precision=0,
-    ),
-    NumberSpec(
-        "sunrise_offset_minutes",
-        "Sunrise offset",
-        DEFAULT_SUNRISE_OFFSET_MINUTES,
-        -180,
-        180,
-        1,
-        "min",
-        icon="mdi:weather-sunset-up",
-        suggested_display_precision=0,
-    ),
-    NumberSpec(
-        "sunset_offset_minutes",
-        "Sunset offset",
-        DEFAULT_SUNSET_OFFSET_MINUTES,
-        -180,
-        180,
-        1,
-        "min",
-        icon="mdi:weather-sunset",
-        suggested_display_precision=0,
-    ),
-    NumberSpec(
-        "summer_lux_factor",
-        "Summer sensitivity",
-        DEFAULT_SUMMER_LUX_FACTOR_PERCENT,
-        20,
-        300,
-        1,
-        "%",
-        icon="mdi:weather-sunny",
-        suggested_display_precision=0,
-    ),
-    NumberSpec(
-        "winter_lux_factor",
-        "Winter sensitivity",
-        DEFAULT_WINTER_LUX_FACTOR_PERCENT,
-        20,
-        300,
-        1,
-        "%",
-        icon="mdi:weather-snowy",
-        suggested_display_precision=0,
-    ),
-)
-
-
-def calibration_number_specs(role: str) -> tuple[NumberSpec, ...]:
-    """Per-cover-per-state calibrated raw position (%), e.g. left_shade_pos."""
-    return tuple(
-        NumberSpec(
-            key=f"{role}_{state.value}_pos",
-            name=f"{role.capitalize()} {state.value.capitalize()} position",
-            default=DEFAULT_CALIBRATION[state],
-            min_value=0,
-            max_value=100,
-            step=1,
-            unit="%",
-            icon="mdi:blinds-horizontal",
-            suggested_display_precision=0,
-        )
-        for state in SemanticState
-    )

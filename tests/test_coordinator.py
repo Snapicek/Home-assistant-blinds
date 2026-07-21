@@ -13,7 +13,7 @@ from custom_components.chained_blinds import cover_control as cover_control_modu
 from custom_components.chained_blinds.const import SemanticState
 from custom_components.chained_blinds.coordinator import ChainedBlindsCoordinator
 
-from .fakes import FakeHass, FakeNumber, FakeSwitch, FakeConfigEntry, make_room
+from .fakes import FakeHass, FakeSwitch, make_room
 
 NOON = datetime(2026, 7, 21, 12, 0)
 FAR_FUTURE_SUNSET = datetime(2026, 7, 21, 23, 0)
@@ -298,17 +298,24 @@ async def test_evaluation_reports_lux_value_in_result(monkeypatch):
 # ── Seasonal factor percentage conversion ────────────────────────────────────
 
 async def test_seasonal_factor_percent_converts_correctly(monkeypatch):
-    """150 % entity value should become a ×1.5 multiplier on the thresholds."""
+    """150 % config value should become a ×1.5 multiplier on the thresholds."""
+    from custom_components.chained_blinds.const import (
+        CONF_SEASONAL_SPLIT,
+        CONF_SUMMER_LUX_FACTOR,
+        CONF_WINTER_LUX_FACTOR,
+    )
+
     hass = FakeHass()
     # default lux_medium = 12000; with summer factor 150 % → 12000 × 1.5 = 18000.
     # lux of 17000 would normally darken to MEDIUM, but after scaling it should
     # remain OPEN (current), which validates the percent conversion.
     hass.states.set("sensor.living_room_illuminance", "17000")
-    room = make_room()
+    room = make_room(config_data={
+        CONF_SEASONAL_SPLIT: True,
+        CONF_SUMMER_LUX_FACTOR: 150,  # 150 % == ×1.5
+        CONF_WINTER_LUX_FACTOR: 100,
+    })
     room.entities["enabled"] = FakeSwitch(True)
-    room.entities["seasonal_split"] = FakeSwitch(True)
-    room.entities["summer_lux_factor"] = FakeNumber(150)  # 150 % == ×1.5
-    room.entities["winter_lux_factor"] = FakeNumber(100)
 
     summer_now = datetime(2026, 7, 21, 12, 0)
     coord = _make_coordinator(monkeypatch, hass, room, now=summer_now)
@@ -318,18 +325,25 @@ async def test_seasonal_factor_percent_converts_correctly(monkeypatch):
 
 
 async def test_winter_factor_percent_lowers_thresholds(monkeypatch):
-    """50 % entity value should become a ×0.5 multiplier on the thresholds."""
+    """50 % config value should become a ×0.5 multiplier on the thresholds."""
+    from custom_components.chained_blinds.const import (
+        CONF_SEASONAL_SPLIT,
+        CONF_SUMMER_LUX_FACTOR,
+        CONF_WINTER_LUX_FACTOR,
+    )
+
     hass = FakeHass()
     # default lux_high = 35000; with winter factor 50 % → 35000 × 0.5 = 17500.
     # lux of 20000 is below 35000 (would normally → MEDIUM) but above 17500, so
     # with scaling it should go to SHADE.
     hass.states.set("sensor.living_room_illuminance", "20000")
-    room = make_room()
+    room = make_room(config_data={
+        CONF_SEASONAL_SPLIT: True,
+        CONF_SUMMER_LUX_FACTOR: 100,
+        CONF_WINTER_LUX_FACTOR: 50,  # 50 % == ×0.5
+    })
     room.current_state = SemanticState.OPEN
     room.entities["enabled"] = FakeSwitch(True)
-    room.entities["seasonal_split"] = FakeSwitch(True)
-    room.entities["summer_lux_factor"] = FakeNumber(100)
-    room.entities["winter_lux_factor"] = FakeNumber(50)  # 50 % == ×0.5
 
     winter_now = datetime(2026, 1, 21, 12, 0)
     coord = _make_coordinator(monkeypatch, hass, room, now=winter_now)
@@ -342,11 +356,14 @@ async def test_winter_factor_percent_lowers_thresholds(monkeypatch):
 
 async def test_positive_sunset_offset_delays_night_start(monkeypatch):
     """A +60 min sunset offset should keep the blinds daytime-active 1 h past raw sunset."""
+    from custom_components.chained_blinds.const import CONF_SUNSET_OFFSET_MINUTES
+
     hass = FakeHass()
     hass.states.set("sensor.living_room_illuminance", "0")
-    room = make_room()
+    room = make_room(config_data={
+        CONF_SUNSET_OFFSET_MINUTES: 60,
+    })
     room.entities["enabled"] = FakeSwitch(True)
-    room.entities["sunset_offset_minutes"] = FakeNumber(60)
 
     # Raw sunset is at 20:00; with +60 min offset the night boundary moves to 21:00.
     # At 20:30 the blinds should still be in daytime mode (desired = OPEN at 0 lux).
@@ -364,11 +381,14 @@ async def test_positive_sunset_offset_delays_night_start(monkeypatch):
 
 async def test_negative_sunset_offset_brings_night_start_forward(monkeypatch):
     """A −60 min sunset offset should trigger night/closed 1 h before raw sunset."""
+    from custom_components.chained_blinds.const import CONF_SUNSET_OFFSET_MINUTES
+
     hass = FakeHass()
     hass.states.set("sensor.living_room_illuminance", "5000")
-    room = make_room()
+    room = make_room(config_data={
+        CONF_SUNSET_OFFSET_MINUTES: -60,
+    })
     room.entities["enabled"] = FakeSwitch(True)
-    room.entities["sunset_offset_minutes"] = FakeNumber(-60)
 
     # Raw sunset 20:00; offset makes effective sunset 19:00.
     # At 19:30 desired state should be CLOSED (night).
@@ -385,6 +405,12 @@ async def test_negative_sunset_offset_brings_night_start_forward(monkeypatch):
 
 
 async def test_ramp_enabled_moves_one_step_toward_target(monkeypatch):
+    from custom_components.chained_blinds.const import (
+        CONF_RAMP_ENABLED,
+        CONF_RAMP_STEP_PERCENT,
+        CONF_RAMP_INTERVAL_MINUTES,
+    )
+
     hass = FakeHass()
     hass.states.set("sensor.living_room_illuminance", "60000")
     hass.states.set(
@@ -392,11 +418,12 @@ async def test_ramp_enabled_moves_one_step_toward_target(monkeypatch):
         "open",
         attributes={"current_position": 75},
     )
-    room = make_room()
+    room = make_room(config_data={
+        CONF_RAMP_ENABLED: True,
+        CONF_RAMP_STEP_PERCENT: 20,
+        CONF_RAMP_INTERVAL_MINUTES: 1,
+    })
     room.entities["enabled"] = FakeSwitch(True)
-    room.entities["ramp_enabled"] = FakeSwitch(True)
-    room.entities["ramp_step_percent"] = FakeNumber(20)
-    room.entities["ramp_interval_minutes"] = FakeNumber(1)
 
     coord = _make_coordinator(monkeypatch, hass, room)
     result = await coord._async_update_data()
@@ -408,6 +435,12 @@ async def test_ramp_enabled_moves_one_step_toward_target(monkeypatch):
 
 
 async def test_ramp_waits_for_configured_interval_between_steps(monkeypatch):
+    from custom_components.chained_blinds.const import (
+        CONF_RAMP_ENABLED,
+        CONF_RAMP_STEP_PERCENT,
+        CONF_RAMP_INTERVAL_MINUTES,
+    )
+
     hass = FakeHass()
     hass.states.set("sensor.living_room_illuminance", "60000")
     hass.states.set(
@@ -415,11 +448,12 @@ async def test_ramp_waits_for_configured_interval_between_steps(monkeypatch):
         "open",
         attributes={"current_position": 75},
     )
-    room = make_room()
+    room = make_room(config_data={
+        CONF_RAMP_ENABLED: True,
+        CONF_RAMP_STEP_PERCENT: 20,
+        CONF_RAMP_INTERVAL_MINUTES: 1,
+    })
     room.entities["enabled"] = FakeSwitch(True)
-    room.entities["ramp_enabled"] = FakeSwitch(True)
-    room.entities["ramp_step_percent"] = FakeNumber(20)
-    room.entities["ramp_interval_minutes"] = FakeNumber(1)
 
     coord = _make_coordinator(monkeypatch, hass, room)
     first = await coord._async_update_data()
@@ -438,6 +472,12 @@ async def test_ramp_waits_for_configured_interval_between_steps(monkeypatch):
 
 
 async def test_ramp_retargets_when_desired_state_changes(monkeypatch):
+    from custom_components.chained_blinds.const import (
+        CONF_RAMP_ENABLED,
+        CONF_RAMP_STEP_PERCENT,
+        CONF_RAMP_INTERVAL_MINUTES,
+    )
+
     hass = FakeHass()
     hass.states.set("sensor.living_room_illuminance", "60000")
     hass.states.set(
@@ -445,11 +485,12 @@ async def test_ramp_retargets_when_desired_state_changes(monkeypatch):
         "open",
         attributes={"current_position": 75},
     )
-    room = make_room()
+    room = make_room(config_data={
+        CONF_RAMP_ENABLED: True,
+        CONF_RAMP_STEP_PERCENT: 20,
+        CONF_RAMP_INTERVAL_MINUTES: 1,
+    })
     room.entities["enabled"] = FakeSwitch(True)
-    room.entities["ramp_enabled"] = FakeSwitch(True)
-    room.entities["ramp_step_percent"] = FakeNumber(20)
-    room.entities["ramp_interval_minutes"] = FakeNumber(1)
 
     coord = _make_coordinator(monkeypatch, hass, room)
     await coord._async_update_data()

@@ -7,7 +7,6 @@ via the reconfigure action.
 """
 from __future__ import annotations
 
-from datetime import time as dt_time
 from typing import Any
 
 import voluptuous as vol
@@ -59,7 +58,6 @@ from .const import (
     DEFAULT_WINTER_LUX_FACTOR_PERCENT,
     DOMAIN,
     SemanticState,
-    calibration_config_keys,
 )
 
 

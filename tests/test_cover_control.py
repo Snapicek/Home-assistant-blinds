@@ -3,21 +3,20 @@
 Covers the hard invariants from the original rules: only
 cover.set_cover_position is ever called (never open_cover/close_cover), the
 right cover is staggered after the left one, calibrated positions come from
-the room's number entities (falling back to defaults), and current_state /
+the config entry (falling back to defaults), and current_state /
 last_move_time / the state select are updated only here.
 """
 from custom_components.chained_blinds import cover_control
 from custom_components.chained_blinds.const import SemanticState
 
-from .fakes import FakeHass, FakeNumber, FakeSelect, make_room
+from .fakes import FakeHass, FakeSelect, make_room
 
 
 async def test_moves_left_cover_only_using_calibrated_position():
     hass = FakeHass()
-    room = make_room()
-    room.entities["left_shade_pos"] = FakeNumber(30.0)
+    room = make_room(config_data={"left_shade_pos": 30.0})
 
-    await cover_control.async_move_to_state(hass, room, SemanticState.SHADE)
+    await cover_control.async_move_to_state(hass, room.config_entry, room, SemanticState.SHADE)
 
     assert hass.services.calls == [
         (
@@ -30,9 +29,12 @@ async def test_moves_left_cover_only_using_calibrated_position():
 
 async def test_falls_back_to_default_calibration_when_uncalibrated():
     hass = FakeHass()
+    # Config without any left_open_pos key -> should fall back to DEFAULT_CALIBRATION.
     room = make_room()
+    # Remove the seeded calibration so the fallback path is exercised.
+    room.config_entry.data.pop("left_open_pos", None)
 
-    await cover_control.async_move_to_state(hass, room, SemanticState.OPEN)
+    await cover_control.async_move_to_state(hass, room.config_entry, room, SemanticState.OPEN)
 
     assert hass.services.calls[0][2]["position"] == 75.0  # DEFAULT_CALIBRATION[OPEN]
 
@@ -40,11 +42,12 @@ async def test_falls_back_to_default_calibration_when_uncalibrated():
 async def test_staggers_right_cover_after_left(monkeypatch):
     monkeypatch.setattr(cover_control, "STAGGER_SECONDS", 0)
     hass = FakeHass()
-    room = make_room(right_cover="cover.living_room_right_blind")
-    room.entities["left_closed_pos"] = FakeNumber(0.0)
-    room.entities["right_closed_pos"] = FakeNumber(2.0)
+    room = make_room(
+        config_data={"left_closed_pos": 0.0, "right_closed_pos": 2.0},
+        right_cover="cover.living_room_right_blind",
+    )
 
-    await cover_control.async_move_to_state(hass, room, SemanticState.CLOSED)
+    await cover_control.async_move_to_state(hass, room.config_entry, room, SemanticState.CLOSED)
 
     called_entity_ids = [c[2]["entity_id"] for c in hass.services.calls]
     assert called_entity_ids == ["cover.living_room_left_blind", "cover.living_room_right_blind"]
@@ -56,7 +59,7 @@ async def test_never_calls_open_or_close_cover():
     room = make_room(right_cover="cover.living_room_right_blind")
 
     for state in SemanticState:
-        await cover_control.async_move_to_state(hass, room, state)
+        await cover_control.async_move_to_state(hass, room.config_entry, room, state)
 
     services_called = {call[1] for call in hass.services.calls}
     assert services_called == {"set_cover_position"}
@@ -66,7 +69,7 @@ async def test_updates_current_state_last_move_time_and_persists():
     hass = FakeHass()
     room = make_room()
 
-    await cover_control.async_move_to_state(hass, room, SemanticState.MEDIUM)
+    await cover_control.async_move_to_state(hass, room.config_entry, room, SemanticState.MEDIUM)
 
     assert room.current_state == SemanticState.MEDIUM
     assert room.last_move_time is not None
@@ -82,7 +85,7 @@ async def test_notifies_state_select():
     select = FakeSelect()
     room.entities["state_select"] = select
 
-    await cover_control.async_move_to_state(hass, room, SemanticState.SHADE)
+    await cover_control.async_move_to_state(hass, room.config_entry, room, SemanticState.SHADE)
 
     assert select.updates == [SemanticState.SHADE]
 
@@ -98,6 +101,7 @@ async def test_ramp_move_steps_toward_target_without_updating_semantic_state():
 
     reached = await cover_control.async_move_towards_state(
         hass,
+        room.config_entry,
         room,
         SemanticState.SHADE,
         step_percent=20,
@@ -119,6 +123,7 @@ async def test_ramp_move_marks_state_when_target_reached():
 
     reached = await cover_control.async_move_towards_state(
         hass,
+        room.config_entry,
         room,
         SemanticState.SHADE,
         step_percent=20,
