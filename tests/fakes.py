@@ -59,14 +59,17 @@ class FakeStore:
 class FakeConfigEntry:
     """Minimal stand-in for homeassistant.config_entries.ConfigEntry.
 
-    Only needs to satisfy what DataUpdateCoordinator.__init__ accesses
-    (stores config_entry but does not call methods on it during init).
+    Only needs to satisfy what DataUpdateCoordinator.__init__ accesses.
     """
 
     entry_id = "test_entry"
     domain = "chained_blinds"
     title = "Test Room"
     state = "loaded"
+
+    def async_on_unload(self, callback):
+        """Register a callback to be called when the config entry is unloaded."""
+        pass
 
 
 class FakeNumber:

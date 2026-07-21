@@ -1,5 +1,6 @@
 {
   "name": "Chained Blinds Controller",
   "homeassistant": "2026.1.0",
-  "render_readme": true
+  "render_readme": true,
+  "description": "A Home Assistant custom integration for chain-driven motorized blinds with automatic lux-based control through four semantic states."
 }
