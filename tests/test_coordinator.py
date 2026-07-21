@@ -311,3 +311,92 @@ async def test_negative_sunset_offset_brings_night_start_forward(monkeypatch):
 
     assert result["desired"] == SemanticState.CLOSED
 
+
+async def test_ramp_enabled_moves_one_step_toward_target(monkeypatch):
+    hass = FakeHass()
+    hass.states.set("sensor.living_room_illuminance", "60000")
+    hass.states.set(
+        "cover.living_room_left_blind",
+        "open",
+        attributes={"current_position": 75},
+    )
+    room = make_room()
+    room.entities["enabled"] = FakeSwitch(True)
+    room.entities["ramp_enabled"] = FakeSwitch(True)
+    room.entities["ramp_step_percent"] = FakeNumber(20)
+    room.entities["ramp_interval_minutes"] = FakeNumber(1)
+
+    coord = _make_coordinator(monkeypatch, hass, room)
+    result = await coord._async_update_data()
+
+    assert result["moved"] is True
+    assert result["ramping"] is True
+    assert room.ramp_target_state == SemanticState.SHADE
+    assert hass.services.calls[0][2]["position"] == 55.0
+
+
+async def test_ramp_waits_for_configured_interval_between_steps(monkeypatch):
+    hass = FakeHass()
+    hass.states.set("sensor.living_room_illuminance", "60000")
+    hass.states.set(
+        "cover.living_room_left_blind",
+        "open",
+        attributes={"current_position": 75},
+    )
+    room = make_room()
+    room.entities["enabled"] = FakeSwitch(True)
+    room.entities["ramp_enabled"] = FakeSwitch(True)
+    room.entities["ramp_step_percent"] = FakeNumber(20)
+    room.entities["ramp_interval_minutes"] = FakeNumber(1)
+
+    coord = _make_coordinator(monkeypatch, hass, room)
+    first = await coord._async_update_data()
+    assert first["moved"] is True
+
+    hass.states.set(
+        "cover.living_room_left_blind",
+        "open",
+        attributes={"current_position": 55},
+    )
+    second = await coord._async_update_data()
+
+    assert second["moved"] is False
+    assert second["ramping"] is True
+    assert len(hass.services.calls) == 1
+
+
+async def test_ramp_retargets_when_desired_state_changes(monkeypatch):
+    hass = FakeHass()
+    hass.states.set("sensor.living_room_illuminance", "60000")
+    hass.states.set(
+        "cover.living_room_left_blind",
+        "open",
+        attributes={"current_position": 75},
+    )
+    room = make_room()
+    room.entities["enabled"] = FakeSwitch(True)
+    room.entities["ramp_enabled"] = FakeSwitch(True)
+    room.entities["ramp_step_percent"] = FakeNumber(20)
+    room.entities["ramp_interval_minutes"] = FakeNumber(1)
+
+    coord = _make_coordinator(monkeypatch, hass, room)
+    await coord._async_update_data()
+    hass.states.set(
+        "cover.living_room_left_blind",
+        "open",
+        attributes={"current_position": 55},
+    )
+
+    # Force interval elapsed, then drop lux so desired direction flips to OPEN.
+    room.last_move_time = room.last_move_time - timedelta(minutes=2)
+    hass.states.set("sensor.living_room_illuminance", "0")
+    result = await coord._async_update_data()
+
+    assert result["desired"] == SemanticState.OPEN
+    assert result["moved"] is True
+    assert result["ramping"] is False
+    assert room.current_state == SemanticState.OPEN
+    assert room.ramp_target_state is None
+    assert hass.services.calls[-1][2]["position"] == 75.0
+
+

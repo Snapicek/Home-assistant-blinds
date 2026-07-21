@@ -21,6 +21,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     DOMAIN,
     DEFAULT_OVERRIDE_DURATION_MINUTES,
+    DEFAULT_RAMP_ENABLED,
     DEFAULT_SEASONAL_SPLIT,
     DEFAULT_USE_SUNRISE_OPEN,
 )
@@ -35,6 +36,7 @@ async def async_setup_entry(
         [
             EnabledSwitch(room),
             OverrideSwitch(hass, room),
+            RampEnabledSwitch(room),
             SeasonalSplitSwitch(room),
             SunriseOpenSwitch(room),
         ]
@@ -85,8 +87,27 @@ class SeasonalSplitSwitch(_RoomSwitchBase):
     """Enable summer/winter factors for lux thresholds."""
 
     def __init__(self, room: RoomRuntimeData) -> None:
-        super().__init__(room, "seasonal_split", "Use seasonal light sensitivity", DEFAULT_SEASONAL_SPLIT)
+        super().__init__(
+            room,
+            "seasonal_split",
+            "Use seasonal light sensitivity",
+            DEFAULT_SEASONAL_SPLIT,
+        )
         self._attr_icon = "mdi:weather-partly-snowy-rainy"
+        self._attr_entity_category = EntityCategory.CONFIG
+
+
+class RampEnabledSwitch(_RoomSwitchBase):
+    """Enable gradual, step-by-step movement instead of direct jumps."""
+
+    def __init__(self, room: RoomRuntimeData) -> None:
+        super().__init__(
+            room,
+            "ramp_enabled",
+            "Use gradual movement",
+            DEFAULT_RAMP_ENABLED,
+        )
+        self._attr_icon = "mdi:stairs"
         self._attr_entity_category = EntityCategory.CONFIG
 
 
@@ -94,7 +115,12 @@ class SunriseOpenSwitch(_RoomSwitchBase):
     """Use sunrise(+offset) as the morning open boundary instead of fixed time."""
 
     def __init__(self, room: RoomRuntimeData) -> None:
-        super().__init__(room, "sunrise_open", "Use sunrise for morning opening", DEFAULT_USE_SUNRISE_OPEN)
+        super().__init__(
+            room,
+            "sunrise_open",
+            "Use sunrise for morning opening",
+            DEFAULT_USE_SUNRISE_OPEN,
+        )
         self._attr_icon = "mdi:weather-sunset-up"
         self._attr_entity_category = EntityCategory.CONFIG
 

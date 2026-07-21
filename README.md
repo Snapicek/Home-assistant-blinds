@@ -22,6 +22,7 @@ The integration automatically moves your covers through four semantic states bas
 - **Dwell lock** — prevents rapid down→up→down cycling that can damage chain-drive mechanisms.
 - **Night window** — configurable time range during which the integration holds the blind closed regardless of lux.
 - **Manual override** — dedicated switch holds the current position for a configurable number of minutes, then auto-clears; no external `timer` helper needed.
+- **Optional gradual ramping** — when enabled, blinds move toward the target in configurable step sizes at configurable intervals.
 - **Fully UI-configured** — Config Flow setup, all thresholds and calibration values adjustable via dashboard entities (no YAML editing).
 - **Two-cover rooms** — left and right covers move together with a 1 s stagger so they don't strain the same circuit simultaneously.
 
@@ -108,17 +109,19 @@ the device Settings section.
 | `number.<room>_dwell_minutes` | Minimum delay before another darkening move |
 | `number.<room>_reopen_dwell_minutes` | Minimum delay before another opening move |
 | `number.<room>_override_duration_minutes` | How long pause automation stays active before auto-clear |
+| `number.<room>_ramp_step_percent` | Position delta used for each gradual movement step |
+| `number.<room>_ramp_interval_minutes` | Minimum minutes between gradual movement steps |
 | `number.<room>_sunrise_offset_minutes` | Shift computed sunrise earlier/later |
 | `number.<room>_sunset_offset_minutes` | Shift computed sunset earlier/later |
 | `number.<room>_summer_lux_factor` | Seasonal multiplier for summer brightness response |
 | `number.<room>_winter_lux_factor` | Seasonal multiplier for winter brightness response |
 | `number.<room>_<left/right>_<state>_pos` | Per-cover calibration percentage for each semantic state |
+| `switch.<room>_ramp_enabled` | Enable step-by-step gradual motion instead of direct jumps |
 | `switch.<room>_seasonal_split` | Enable separate summer/winter sensitivity multipliers |
 | `switch.<room>_sunrise_open` | Use sunrise (plus offset) as morning opening boundary |
 
-Most number entities display as whole numbers to reduce visual noise (for
-example `12000 lx` instead of `12000.0 lx`). Seasonal sensitivity factors keep
-decimal precision because they intentionally support fine-grained tuning.
+Number entities display as whole numbers to reduce visual noise (for example
+`12000 lx` instead of `12000.0 lx`).
 
 ---
 

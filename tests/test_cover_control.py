@@ -85,3 +85,46 @@ async def test_notifies_state_select():
     await cover_control.async_move_to_state(hass, room, SemanticState.SHADE)
 
     assert select.updates == [SemanticState.SHADE]
+
+
+async def test_ramp_move_steps_toward_target_without_updating_semantic_state():
+    hass = FakeHass()
+    room = make_room()
+    hass.states.set(
+        "cover.living_room_left_blind",
+        "open",
+        attributes={"current_position": 75},
+    )
+
+    reached = await cover_control.async_move_towards_state(
+        hass,
+        room,
+        SemanticState.SHADE,
+        step_percent=20,
+    )
+
+    assert reached is False
+    assert room.current_state is None
+    assert hass.services.calls[-1][2]["position"] == 55.0
+
+
+async def test_ramp_move_marks_state_when_target_reached():
+    hass = FakeHass()
+    room = make_room()
+    hass.states.set(
+        "cover.living_room_left_blind",
+        "open",
+        attributes={"current_position": 30},
+    )
+
+    reached = await cover_control.async_move_towards_state(
+        hass,
+        room,
+        SemanticState.SHADE,
+        step_percent=20,
+    )
+
+    assert reached is True
+    assert room.current_state == SemanticState.SHADE
+    assert hass.services.calls[-1][2]["position"] == 25.0
+

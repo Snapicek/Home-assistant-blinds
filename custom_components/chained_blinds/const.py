@@ -64,6 +64,8 @@ DEFAULT_REOPEN_DWELL_MINUTES = 30.0
 DEFAULT_SUNSET_OFFSET_MINUTES = 0.0
 DEFAULT_SUNRISE_OFFSET_MINUTES = 0.0
 DEFAULT_OVERRIDE_DURATION_MINUTES = 60.0
+DEFAULT_RAMP_STEP_PERCENT = 20.0
+DEFAULT_RAMP_INTERVAL_MINUTES = 5.0
 DEFAULT_OPEN_TIME = dt_time(7, 0)
 DEFAULT_SUMMER_LUX_FACTOR = 1.15
 DEFAULT_WINTER_LUX_FACTOR = 0.85
@@ -71,6 +73,7 @@ DEFAULT_SUMMER_LUX_FACTOR_PERCENT = 115
 DEFAULT_WINTER_LUX_FACTOR_PERCENT = 85
 DEFAULT_SEASONAL_SPLIT = False
 DEFAULT_USE_SUNRISE_OPEN = False
+DEFAULT_RAMP_ENABLED = False
 
 COVER_ROLES = ("left", "right")
 
@@ -168,6 +171,28 @@ THRESHOLD_NUMBER_SPECS: tuple[NumberSpec, ...] = (
         1,
         "min",
         icon="mdi:timer-lock-outline",
+        suggested_display_precision=0,
+    ),
+    NumberSpec(
+        "ramp_step_percent",
+        "Gradual step size",
+        DEFAULT_RAMP_STEP_PERCENT,
+        5,
+        100,
+        5,
+        "%",
+        icon="mdi:stairs",
+        suggested_display_precision=0,
+    ),
+    NumberSpec(
+        "ramp_interval_minutes",
+        "Step interval",
+        DEFAULT_RAMP_INTERVAL_MINUTES,
+        1,
+        30,
+        1,
+        "min",
+        icon="mdi:timer-cog-outline",
         suggested_display_precision=0,
     ),
     NumberSpec(

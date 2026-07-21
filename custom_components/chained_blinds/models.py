@@ -28,6 +28,7 @@ class RoomRuntimeData:
     # Tracked state (rule 10: only written when a real move happens).
     current_state: SemanticState | None = None
     last_move_time: datetime | None = None
+    ramp_target_state: SemanticState | None = None
 
     # Populated by the number/select/switch/time platforms during
     # async_setup_entry so the coordinator can read live values directly off

@@ -16,6 +16,7 @@ from custom_components.chained_blinds.select import ChainedBlindsStateSelect
 from custom_components.chained_blinds.switch import (
     EnabledSwitch,
     OverrideSwitch,
+    RampEnabledSwitch,
     SeasonalSplitSwitch,
     SunriseOpenSwitch,
 )
@@ -75,6 +76,13 @@ def test_sunrise_open_switch_defaults_off():
     entity = SunriseOpenSwitch(room)
     assert entity.is_on is False
     assert entity.unique_id == f"{room.entry_id}_sunrise_open"
+
+
+def test_ramp_enabled_switch_defaults_off():
+    room = make_room()
+    entity = RampEnabledSwitch(room)
+    assert entity.is_on is False
+    assert entity.unique_id == f"{room.entry_id}_ramp_enabled"
 
 
 def test_open_time_entity_defaults():
@@ -158,6 +166,7 @@ def test_sunrise_open_switch_has_correct_icon():
 
 def test_maintenance_switches_are_configuration_entities():
     room = make_room()
+    assert RampEnabledSwitch(room).entity_category == EntityCategory.CONFIG
     assert SeasonalSplitSwitch(room).entity_category == EntityCategory.CONFIG
     assert SunriseOpenSwitch(room).entity_category == EntityCategory.CONFIG
 
@@ -172,6 +181,8 @@ def test_threshold_number_specs_include_seasonal_and_sunrise_entries():
     keys = [s.key for s in THRESHOLD_NUMBER_SPECS]
     assert "summer_lux_factor" in keys
     assert "winter_lux_factor" in keys
+    assert "ramp_step_percent" in keys
+    assert "ramp_interval_minutes" in keys
     assert "sunrise_offset_minutes" in keys
     assert "sunset_offset_minutes" in keys
     assert "override_duration_minutes" in keys

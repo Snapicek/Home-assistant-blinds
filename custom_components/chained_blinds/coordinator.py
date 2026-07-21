@@ -21,6 +21,9 @@ from .const import (
     DEFAULT_LUX_MEDIUM,
     DEFAULT_LUX_MEDIUM_REOPEN,
     DEFAULT_OPEN_TIME,
+    DEFAULT_RAMP_ENABLED,
+    DEFAULT_RAMP_INTERVAL_MINUTES,
+    DEFAULT_RAMP_STEP_PERCENT,
     DEFAULT_REOPEN_DWELL_MINUTES,
     DEFAULT_SEASONAL_SPLIT,
     DEFAULT_SUMMER_LUX_FACTOR_PERCENT,
@@ -119,9 +122,16 @@ class ChainedBlindsCoordinator(DataUpdateCoordinator[dict]):
             open_time = self._sunrise_with_offset(now).time().replace(tzinfo=None)
         current = room.current_state or SemanticState.OPEN
 
-        result = {"current": current, "desired": current, "lux": lux, "moved": False}
+        result = {
+            "current": current,
+            "desired": current,
+            "lux": lux,
+            "moved": False,
+            "ramping": False,
+        }
 
         if not enabled:
+            room.ramp_target_state = None
             return result
 
         thresholds = Thresholds(
@@ -151,16 +161,66 @@ class ChainedBlindsCoordinator(DataUpdateCoordinator[dict]):
         )
         result["desired"] = desired
 
-        if should_apply_move(
+        if override_active:
+            room.ramp_target_state = None
+            return result
+
+        ramp_enabled = _is_on(room, "ramp_enabled", DEFAULT_RAMP_ENABLED)
+        ramp_step_percent = _num(room, "ramp_step_percent", DEFAULT_RAMP_STEP_PERCENT)
+        ramp_interval_minutes = _num(room, "ramp_interval_minutes", DEFAULT_RAMP_INTERVAL_MINUTES)
+        ramp_interval_seconds = max(1.0, ramp_interval_minutes * 60.0)
+
+        if not ramp_enabled:
+            room.ramp_target_state = None
+
+        if room.ramp_target_state is not None and room.ramp_target_state != desired:
+            room.ramp_target_state = desired
+
+        can_start_move = should_apply_move(
             desired=desired,
             current=current,
             last_move_time=room.last_move_time,
             now=now,
             dwell_minutes=_num(room, "dwell_minutes", DEFAULT_DWELL_MINUTES),
             reopen_dwell_minutes=_num(room, "reopen_dwell_minutes", DEFAULT_REOPEN_DWELL_MINUTES),
-        ):
-            await cover_control.async_move_to_state(self.hass, room, desired)
-            result["current"] = desired
-            result["moved"] = True
+        )
 
+        if not ramp_enabled:
+            if can_start_move:
+                await cover_control.async_move_to_state(self.hass, room, desired)
+                result["current"] = desired
+                result["moved"] = True
+            return result
+
+        ramp_target = room.ramp_target_state
+        if ramp_target is None and can_start_move:
+            ramp_target = desired
+            room.ramp_target_state = desired
+
+        if ramp_target is None:
+            return result
+
+        elapsed_since_last_move = (
+            (dt_util.utcnow() - room.last_move_time).total_seconds()
+            if room.last_move_time is not None
+            else ramp_interval_seconds
+        )
+        if elapsed_since_last_move < ramp_interval_seconds:
+            result["ramping"] = True
+            return result
+
+        reached_target = await cover_control.async_move_towards_state(
+            self.hass,
+            room,
+            ramp_target,
+            step_percent=ramp_step_percent,
+        )
+        result["moved"] = True
+        if reached_target:
+            room.ramp_target_state = None
+            result["current"] = ramp_target
+            return result
+
+        result["ramping"] = True
+        result["current"] = room.current_state or current
         return result
