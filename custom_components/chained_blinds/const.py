@@ -43,10 +43,21 @@ DEFAULT_CALIBRATION: dict[SemanticState, float] = {
 }
 
 # Default live-tunable lux thresholds and dwell minutes.
-DEFAULT_LUX_MEDIUM = 200.0
-DEFAULT_LUX_HIGH = 1000.0
-DEFAULT_LUX_MEDIUM_REOPEN = 120.0
-DEFAULT_LUX_HIGH_REOPEN = 700.0
+# Calibrated for an OUTDOOR lux sensor (full-sky measurement).
+# Typical outdoor ranges:
+#   heavy overcast  1 000 – 5 000 lx
+#   bright overcast 5 000 – 20 000 lx
+#   hazy sun       20 000 – 50 000 lx
+#   clear direct   60 000 – 100 000 lx
+#
+# Rule of thumb: set lux_medium at the point where you want partial shading
+# (hazy / bright sun starts), lux_high where full shade is needed (strong direct
+# sun).  The *_reopen values are set at ~60 % of the corresponding close
+# threshold to provide hysteresis and avoid close/open cycling on passing clouds.
+DEFAULT_LUX_MEDIUM = 12000.0
+DEFAULT_LUX_HIGH = 35000.0
+DEFAULT_LUX_MEDIUM_REOPEN = 7000.0
+DEFAULT_LUX_HIGH_REOPEN = 21000.0
 DEFAULT_DWELL_MINUTES = 10.0
 DEFAULT_REOPEN_DWELL_MINUTES = 30.0
 DEFAULT_SUNSET_OFFSET_MINUTES = 0.0
@@ -72,18 +83,18 @@ class NumberSpec:
 
 # Thresholds/dwell/offsets: one instance per room (config entry).
 THRESHOLD_NUMBER_SPECS: tuple[NumberSpec, ...] = (
-    NumberSpec("lux_medium", "Lux threshold: medium", DEFAULT_LUX_MEDIUM, 0, 100000, 1, "lx",
+    NumberSpec("lux_medium", "Lux threshold: medium", DEFAULT_LUX_MEDIUM, 0, 100000, 100, "lx",
                icon="mdi:brightness-5"),
-    NumberSpec("lux_high", "Lux threshold: shade", DEFAULT_LUX_HIGH, 0, 100000, 1, "lx",
+    NumberSpec("lux_high", "Lux threshold: shade", DEFAULT_LUX_HIGH, 0, 100000, 100, "lx",
                icon="mdi:brightness-7"),
     NumberSpec(
         "lux_medium_reopen", "Lux threshold: reopen to medium",
-        DEFAULT_LUX_MEDIUM_REOPEN, 0, 100000, 1, "lx",
+        DEFAULT_LUX_MEDIUM_REOPEN, 0, 100000, 100, "lx",
         icon="mdi:brightness-5",
     ),
     NumberSpec(
         "lux_high_reopen", "Lux threshold: reopen to shade",
-        DEFAULT_LUX_HIGH_REOPEN, 0, 100000, 1, "lx",
+        DEFAULT_LUX_HIGH_REOPEN, 0, 100000, 100, "lx",
         icon="mdi:brightness-7",
     ),
     NumberSpec(
