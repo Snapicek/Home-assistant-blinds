@@ -12,6 +12,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import CONF_LEFT_COVER, CONF_LUX_SENSOR, CONF_RIGHT_COVER, DOMAIN
 from .coordinator import ChainedBlindsCoordinator
+from .helpers import elapsed_seconds
 from .models import RoomRuntimeData
 
 _LOGGER = logging.getLogger(__name__)
@@ -72,8 +73,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def _async_handle_cover_state_change(event) -> None:
         # Skip if the integration itself triggered the move recently.
         if room.last_move_time is not None:
-            elapsed = (dt_util.utcnow() - room.last_move_time).total_seconds()
-            if elapsed < _MANUAL_MOVE_GRACE_SECONDS:
+            if elapsed_seconds(room.last_move_time, dt_util.utcnow()) < _MANUAL_MOVE_GRACE_SECONDS:
                 return
         # Skip if automation is already paused.
         override = room.entities.get("override")

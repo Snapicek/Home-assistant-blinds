@@ -16,6 +16,7 @@ from homeassistant.util import dt as dt_util
 from . import cover_control
 from .const import (
     DEFAULT_DWELL_MINUTES,
+
     DEFAULT_LUX_HIGH,
     DEFAULT_LUX_HIGH_REOPEN,
     DEFAULT_LUX_MEDIUM,
@@ -36,6 +37,7 @@ from .const import (
 )
 from .models import RoomRuntimeData
 from .resolver import Thresholds, resolve_desired_state, should_apply_move
+from .helpers import elapsed_seconds, minutes_to_seconds, percent_to_factor
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -91,8 +93,8 @@ class ChainedBlindsCoordinator(DataUpdateCoordinator[dict]):
     def _season_factor(self, now: datetime) -> float:
         # Apr-Sep are treated as the sunny season; Oct-Mar as winter season.
         if 4 <= now.month <= 9:
-            return _num(self.room, "summer_lux_factor", DEFAULT_SUMMER_LUX_FACTOR_PERCENT) / 100.0
-        return _num(self.room, "winter_lux_factor", DEFAULT_WINTER_LUX_FACTOR_PERCENT) / 100.0
+            return percent_to_factor(_num(self.room, "summer_lux_factor", DEFAULT_SUMMER_LUX_FACTOR_PERCENT))
+        return percent_to_factor(_num(self.room, "winter_lux_factor", DEFAULT_WINTER_LUX_FACTOR_PERCENT))
 
     async def _async_update_data(self) -> dict:
         room = self.room
@@ -168,7 +170,7 @@ class ChainedBlindsCoordinator(DataUpdateCoordinator[dict]):
         ramp_enabled = _is_on(room, "ramp_enabled", DEFAULT_RAMP_ENABLED)
         ramp_step_percent = _num(room, "ramp_step_percent", DEFAULT_RAMP_STEP_PERCENT)
         ramp_interval_minutes = _num(room, "ramp_interval_minutes", DEFAULT_RAMP_INTERVAL_MINUTES)
-        ramp_interval_seconds = max(1.0, ramp_interval_minutes * 60.0)
+        ramp_interval_seconds = max(1.0, minutes_to_seconds(ramp_interval_minutes))
 
         if not ramp_enabled:
             room.ramp_target_state = None
@@ -201,7 +203,7 @@ class ChainedBlindsCoordinator(DataUpdateCoordinator[dict]):
             return result
 
         elapsed_since_last_move = (
-            (dt_util.utcnow() - room.last_move_time).total_seconds()
+            elapsed_seconds(room.last_move_time, dt_util.utcnow())
             if room.last_move_time is not None
             else ramp_interval_seconds
         )

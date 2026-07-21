@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime, time as dt_time
 
 from .const import RANK, SemanticState
+from .helpers import elapsed_minutes
 
 
 @dataclass(frozen=True)
@@ -95,5 +96,4 @@ def should_apply_move(
 
     lightening = RANK[desired] < RANK[current]
     required_minutes = reopen_dwell_minutes if lightening else dwell_minutes
-    elapsed_minutes = (now - last_move_time).total_seconds() / 60.0
-    return elapsed_minutes >= required_minutes
+    return elapsed_minutes(last_move_time, now) >= required_minutes

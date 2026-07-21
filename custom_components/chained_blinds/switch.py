@@ -26,6 +26,7 @@ from .const import (
     DEFAULT_USE_SUNRISE_OPEN,
 )
 from .models import RoomRuntimeData
+from .helpers import elapsed_seconds, minutes_to_seconds
 
 
 async def async_setup_entry(
@@ -157,7 +158,7 @@ class OverrideSwitch(_RoomSwitchBase):
             override_until = dt_util.parse_datetime(override_until_raw)
             if override_until is not None:
                 self._override_until = dt_util.as_utc(override_until)
-                remaining = (self._override_until - dt_util.utcnow()).total_seconds()
+                remaining = elapsed_seconds(dt_util.utcnow(), self._override_until)
                 if remaining <= 0:
                     self._override_until = None
                     await super().async_turn_off()
@@ -191,7 +192,7 @@ class OverrideSwitch(_RoomSwitchBase):
                 if duration_entity is not None and duration_entity.native_value is not None
                 else DEFAULT_OVERRIDE_DURATION_MINUTES
             )
-            seconds = minutes * 60
+            seconds = minutes_to_seconds(minutes)
 
         self._override_until = dt_util.utcnow() + timedelta(seconds=seconds)
         self._unsub_expiry = async_call_later(self._hass, seconds, self._async_expire)

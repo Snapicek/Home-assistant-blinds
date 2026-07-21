@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from .const import DEFAULT_CALIBRATION, SemanticState
+from .helpers import is_at_target, step_towards
 from .models import RoomRuntimeData
 
 _LOGGER = logging.getLogger(__name__)
@@ -25,7 +26,6 @@ def _calibrated_position(room: RoomRuntimeData, role: str, state: SemanticState)
         return float(entity.native_value)
     return DEFAULT_CALIBRATION[state]
 
-
 def _current_cover_position(hass: HomeAssistant, entity_id: str) -> float | None:
     state = hass.states.get(entity_id)
     if state is None:
@@ -38,20 +38,6 @@ def _current_cover_position(hass: HomeAssistant, entity_id: str) -> float | None
     except (TypeError, ValueError):
         return None
 
-
-def _step_towards(current: float | None, target: float, step: float) -> float:
-    step = max(0.1, abs(step))
-    if current is None:
-        return target
-    if abs(target - current) <= step:
-        return target
-    if target > current:
-        return current + step
-    return current - step
-
-
-def _is_at_target(commanded: float, target: float, *, tolerance: float = 0.5) -> bool:
-    return abs(commanded - target) <= tolerance
 
 
 async def _async_apply_positions(
@@ -124,18 +110,18 @@ async def async_move_towards_state(
     """Move one incremental step toward a semantic target; return True if reached."""
     left_target = _calibrated_position(room, "left", target_state)
     left_current = _current_cover_position(hass, room.left_cover)
-    left_next = _step_towards(left_current, left_target, step_percent)
+    left_next = step_towards(left_current, left_target, step_percent)
 
     right_next: float | None = None
     right_target: float | None = None
     if room.right_cover:
         right_target = _calibrated_position(room, "right", target_state)
         right_current = _current_cover_position(hass, room.right_cover)
-        right_next = _step_towards(right_current, right_target, step_percent)
+        right_next = step_towards(right_current, right_target, step_percent)
 
-    reached = _is_at_target(left_next, left_target)
+    reached = is_at_target(left_next, left_target)
     if right_target is not None and right_next is not None:
-        reached = reached and _is_at_target(right_next, right_target)
+        reached = reached and is_at_target(right_next, right_target)
 
     await _async_apply_positions(
         hass,
