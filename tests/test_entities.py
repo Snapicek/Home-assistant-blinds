@@ -21,7 +21,7 @@ from custom_components.chained_blinds.switch import (
 )
 from custom_components.chained_blinds.time import OpenTimeEntity
 
-from .fakes import make_room
+from .fakes import disable_ha_state_writes, make_room
 
 
 def test_number_entity_wires_spec_onto_attributes():
@@ -104,6 +104,7 @@ async def test_number_entity_rounds_values_for_integer_precision_spec():
     room = make_room()
     spec = THRESHOLD_NUMBER_SPECS[0]  # lux_medium
     entity = ChainedBlindsNumber(room, spec)
+    disable_ha_state_writes(entity)
     await entity.async_set_native_value(1234.7)
     assert entity.native_value == 1235.0
 

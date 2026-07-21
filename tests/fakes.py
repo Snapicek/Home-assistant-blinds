@@ -90,6 +90,12 @@ class FakeSelect:
         self.updates.append(state)
 
 
+def disable_ha_state_writes(entity) -> None:
+    """Disable HA state-write side effects for unattached entity unit tests."""
+
+    entity.async_write_ha_state = lambda: None
+
+
 def make_room(**overrides):
     from custom_components.chained_blinds.models import RoomRuntimeData
 
