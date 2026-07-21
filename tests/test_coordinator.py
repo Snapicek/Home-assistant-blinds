@@ -228,10 +228,10 @@ async def test_evaluation_reports_lux_value_in_result(monkeypatch):
 async def test_seasonal_factor_percent_converts_correctly(monkeypatch):
     """150 % entity value should become a ×1.5 multiplier on the thresholds."""
     hass = FakeHass()
-    # default lux_high = 35000; with summer factor 150 % → 35000 × 1.5 = 52500.
-    # lux of 40000 is above 35000 (would normally → SHADE) but below 52500, so
-    # with the scaling applied it should stay OPEN (current).
-    hass.states.set("sensor.living_room_illuminance", "40000")
+    # default lux_medium = 12000; with summer factor 150 % → 12000 × 1.5 = 18000.
+    # lux of 17000 would normally darken to MEDIUM, but after scaling it should
+    # remain OPEN (current), which validates the percent conversion.
+    hass.states.set("sensor.living_room_illuminance", "17000")
     room = make_room()
     room.entities["enabled"] = FakeSwitch(True)
     room.entities["seasonal_split"] = FakeSwitch(True)
@@ -283,7 +283,7 @@ async def test_positive_sunset_offset_delays_night_start(monkeypatch):
     raw_sunset = datetime(2026, 7, 21, 20, 0)
     monkeypatch.setattr(
         coord, "_sunset_with_offset",
-        lambda now: raw_sunset + __import__("datetime").timedelta(minutes=60),
+        lambda now: raw_sunset + timedelta(minutes=60),
     )
     result = await coord._async_update_data()
 
@@ -305,7 +305,7 @@ async def test_negative_sunset_offset_brings_night_start_forward(monkeypatch):
     raw_sunset = datetime(2026, 7, 21, 20, 0)
     monkeypatch.setattr(
         coord, "_sunset_with_offset",
-        lambda now: raw_sunset + __import__("datetime").timedelta(minutes=-60),
+        lambda now: raw_sunset + timedelta(minutes=-60),
     )
     result = await coord._async_update_data()
 
