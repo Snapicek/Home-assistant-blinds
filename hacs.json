@@ -1,6 +1,8 @@
 {
   "name": "Chained Blinds Controller",
-  "homeassistant": "2026.1.0",
+  "homeassistant": "2026.5.0",
+  "domains": ["home_assistant_blinds"],
   "render_readme": true,
-  "description": "A Home Assistant custom integration for chain-driven motorized blinds with automatic lux-based control through four semantic states."
+  "description": "A Home Assistant custom integration for chain-driven motorized blinds with automatic lux-based control through four semantic states.",
+  "iot_class": "local_polling"
 }
