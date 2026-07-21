@@ -1,7 +1,5 @@
 {
   "name": "Chained Blinds Controller",
   "homeassistant": "2026.5.0",
-  "domains": ["home_assistant_blinds"],
-  "render_readme": true,
-  "iot_class": "local_polling"
+  "render_readme": true
 }
