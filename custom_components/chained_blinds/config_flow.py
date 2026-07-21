@@ -1,8 +1,9 @@
 """Config flow for Chained Blinds.
 
 Each config entry represents one room: a required "left" cover, an optional
-"right" cover, a required lux sensor, and an optional sun-at-window binary
-sensor. Everything else (thresholds, dwell, calibration, enable, override)
+"right" cover, a required lux sensor, and an optional sun-at-window sensor
+(a `binary_sensor`, or a plain `sensor` reporting "true"/"false"). Everything
+else (thresholds, dwell, calibration, enable, override)
 is exposed as live-tunable entities created by the number/select/switch/time
 platforms, not as config-entry data -- see const.py's *_NUMBER_SPECS.
 """
@@ -33,7 +34,9 @@ def _build_schema(current: dict[str, Any]) -> vol.Schema:
             ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
             vol.Optional(
                 CONF_SUN_SENSOR, default=current.get(CONF_SUN_SENSOR, "")
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor")),
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
+            ),
         }
     )
 

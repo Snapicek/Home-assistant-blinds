@@ -19,15 +19,20 @@ def test_validate_requires_left_cover_and_lux_sensor():
 
 
 def test_validate_passes_with_only_required_fields():
-    errors = _validate({CONF_LEFT_COVER: "cover.left", CONF_LUX_SENSOR: "sensor.lux"})
+    errors = _validate(
+        {
+            CONF_LEFT_COVER: "cover.living_room_left_blind",
+            CONF_LUX_SENSOR: "sensor.living_room_illuminance",
+        }
+    )
     assert errors == {}
 
 
 def test_validate_does_not_require_optional_fields():
     errors = _validate(
         {
-            CONF_LEFT_COVER: "cover.left",
-            CONF_LUX_SENSOR: "sensor.lux",
+            CONF_LEFT_COVER: "cover.living_room_left_blind",
+            CONF_LUX_SENSOR: "sensor.living_room_illuminance",
             CONF_RIGHT_COVER: "",
             CONF_SUN_SENSOR: "",
         }
@@ -36,22 +41,32 @@ def test_validate_does_not_require_optional_fields():
 
 
 def test_title_single_cover():
-    title = _title({CONF_LEFT_COVER: "cover.left"})
-    assert title == "Chained Blinds (cover.left)"
+    title = _title({CONF_LEFT_COVER: "cover.living_room_left_blind"})
+    assert title == "Chained Blinds (cover.living_room_left_blind)"
 
 
 def test_title_two_covers():
-    title = _title({CONF_LEFT_COVER: "cover.left", CONF_RIGHT_COVER: "cover.right"})
-    assert title == "Chained Blinds (cover.left & cover.right)"
+    title = _title(
+        {
+            CONF_LEFT_COVER: "cover.living_room_left_blind",
+            CONF_RIGHT_COVER: "cover.living_room_right_blind",
+        }
+    )
+    assert title == "Chained Blinds (cover.living_room_left_blind & cover.living_room_right_blind)"
 
 
 def test_build_schema_prefills_current_values():
-    schema = _build_schema({CONF_LEFT_COVER: "cover.left", CONF_LUX_SENSOR: "sensor.lux"})
+    schema = _build_schema(
+        {
+            CONF_LEFT_COVER: "cover.living_room_left_blind",
+            CONF_LUX_SENSOR: "sensor.living_room_illuminance",
+        }
+    )
     defaults = {
         marker.schema: marker.default() if callable(marker.default) else marker.default
         for marker in schema.schema
     }
-    assert defaults[CONF_LEFT_COVER] == "cover.left"
-    assert defaults[CONF_LUX_SENSOR] == "sensor.lux"
+    assert defaults[CONF_LEFT_COVER] == "cover.living_room_left_blind"
+    assert defaults[CONF_LUX_SENSOR] == "sensor.living_room_illuminance"
     assert defaults[CONF_RIGHT_COVER] == ""
     assert defaults[CONF_SUN_SENSOR] == ""

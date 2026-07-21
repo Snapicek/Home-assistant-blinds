@@ -20,7 +20,11 @@ async def test_moves_left_cover_only_using_calibrated_position():
     await cover_control.async_move_to_state(hass, room, SemanticState.SHADE)
 
     assert hass.services.calls == [
-        ("cover", "set_cover_position", {"entity_id": "cover.left", "position": 30.0})
+        (
+            "cover",
+            "set_cover_position",
+            {"entity_id": "cover.living_room_left_blind", "position": 30.0},
+        )
     ]
 
 
@@ -36,19 +40,20 @@ async def test_falls_back_to_default_calibration_when_uncalibrated():
 async def test_staggers_right_cover_after_left(monkeypatch):
     monkeypatch.setattr(cover_control, "STAGGER_SECONDS", 0)
     hass = FakeHass()
-    room = make_room(right_cover="cover.right")
+    room = make_room(right_cover="cover.living_room_right_blind")
     room.entities["left_closed_pos"] = FakeNumber(0.0)
     room.entities["right_closed_pos"] = FakeNumber(2.0)
 
     await cover_control.async_move_to_state(hass, room, SemanticState.CLOSED)
 
-    assert [c[2]["entity_id"] for c in hass.services.calls] == ["cover.left", "cover.right"]
+    called_entity_ids = [c[2]["entity_id"] for c in hass.services.calls]
+    assert called_entity_ids == ["cover.living_room_left_blind", "cover.living_room_right_blind"]
     assert hass.services.calls[1][2]["position"] == 2.0
 
 
 async def test_never_calls_open_or_close_cover():
     hass = FakeHass()
-    room = make_room(right_cover="cover.right")
+    room = make_room(right_cover="cover.living_room_right_blind")
 
     for state in SemanticState:
         await cover_control.async_move_to_state(hass, room, state)

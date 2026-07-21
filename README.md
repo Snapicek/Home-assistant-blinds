@@ -31,7 +31,7 @@ The integration automatically moves your covers through four semantic states bas
 | Home Assistant | ≥ 2024.4 |
 | A lux sensor entity | e.g. `sensor.living_room_illuminance` |
 | One or two `cover` entities | Chain-driven roller blind(s) |
-| *(Optional)* Sun-at-window `binary_sensor` | Gates darkening moves |
+| *(Optional)* Sun-at-window sensor | `binary_sensor`, or a `sensor` reporting `true`/`false`; gates darkening moves |
 
 ---
 
@@ -65,7 +65,7 @@ The integration automatically moves your covers through four semantic states bas
    - **Left cover** *(required)* — a `cover` entity.
    - **Right cover** *(optional)* — second `cover` entity; moves 1 s after the left one.
    - **Lux sensor** — a `sensor` entity reporting illuminance in lux.
-   - **Sun-at-window sensor** *(optional)* — a `binary_sensor`; when `off` the integration will not darken.
+   - **Sun-at-window sensor** *(optional)* — a `binary_sensor`, or a `sensor` reporting `true`/`false`; when off the integration will not darken.
 4. Click **Submit**. A new device appears under **Devices & Services**.
 
 You can change any of these settings at any time via the integration's **Configure** button.

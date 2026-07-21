@@ -96,9 +96,9 @@ def make_room(**overrides):
     defaults = dict(
         entry_id="test_entry",
         name="Test Room",
-        left_cover="cover.left",
+        left_cover="cover.living_room_left_blind",
         right_cover=None,
-        lux_sensor="sensor.lux",
+        lux_sensor="sensor.living_room_illuminance",
         sun_sensor=None,
         store=FakeStore(),
     )
