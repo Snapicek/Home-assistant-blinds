@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="custom_components/chained_blinds/brand/icon@2x.png" alt="Chained Blinds Controller icon" width="96" height="96">
+</p>
+
 # Chained Blinds Controller
 
 [![CI](https://github.com/snapicek/home-assistant-blinds/actions/workflows/validate.yml/badge.svg)](https://github.com/snapicek/home-assistant-blinds/actions/workflows/validate.yml)
