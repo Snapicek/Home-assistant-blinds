@@ -16,6 +16,16 @@ from custom_components.chained_blinds.switch import OverrideSwitch, _RoomSwitchB
 from .fakes import FakeHass, FakeStore, make_room
 
 
+class _TypedFakeStore(FakeStore):
+    """Mimic Home Assistant's generic Store[T] constructor shape in tests."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__()
+
+    def __class_getitem__(cls, _item):
+        return cls
+
+
 @dataclass
 class _FakeEntry:
     entry_id: str = "entry_1"
@@ -95,7 +105,7 @@ async def test_async_setup_entry_manual_move_activates_override(monkeypatch):
         listeners.append((list(entities), callback))
         return lambda: None
 
-    monkeypatch.setattr(integration, "Store", lambda *args, **kwargs: FakeStore())
+    monkeypatch.setattr(integration, "Store", _TypedFakeStore)
     monkeypatch.setattr(integration, "ChainedBlindsCoordinator", _FakeCoordinator)
     monkeypatch.setattr(integration, "async_track_state_change_event", _fake_track_state_change_event)
 
@@ -133,7 +143,7 @@ async def test_async_setup_entry_wires_listeners_and_refreshes_on_lux(monkeypatc
         listeners.append((list(entities), callback))
         return lambda: None
 
-    monkeypatch.setattr(integration, "Store", lambda *args, **kwargs: FakeStore())
+    monkeypatch.setattr(integration, "Store", _TypedFakeStore)
     monkeypatch.setattr(integration, "ChainedBlindsCoordinator", _FakeCoordinator)
     monkeypatch.setattr(integration, "async_track_state_change_event", _fake_track_state_change_event)
 
@@ -168,7 +178,7 @@ async def test_manual_move_ignores_grace_window_then_enables_override(monkeypatc
 
     now_ref = {"now": datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)}
 
-    monkeypatch.setattr(integration, "Store", lambda *args, **kwargs: FakeStore())
+    monkeypatch.setattr(integration, "Store", _TypedFakeStore)
     monkeypatch.setattr(integration, "ChainedBlindsCoordinator", _FakeCoordinator)
     monkeypatch.setattr(integration, "async_track_state_change_event", _fake_track_state_change_event)
     monkeypatch.setattr(integration.dt_util, "utcnow", lambda: now_ref["now"])
