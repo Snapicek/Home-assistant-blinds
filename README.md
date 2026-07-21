@@ -32,7 +32,7 @@ The integration automatically moves your covers through four semantic states bas
 
 | Requirement | Notes |
 |---|---|
-| Home Assistant | ≥ 2024.4 |
+| Home Assistant | ≥ 2026.5 |
 | A lux sensor entity | e.g. `sensor.living_room_illuminance` |
 | One or two `cover` entities | Chain-driven roller blind(s) |
 | *(Optional)* Sun-at-window sensor | `binary_sensor`, or a `sensor` reporting `true`/`false`; gates darkening moves |
