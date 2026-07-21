@@ -32,12 +32,6 @@ def _tier(lux: float, high: float, medium: float) -> SemanticState:
     return SemanticState.OPEN
 
 
-def _gate_shade(tier: SemanticState, sun_at_window: bool | None, lux: float, medium: float) -> SemanticState:
-    """SHADE requires the (optional) sun-at-window signal; absent = always true."""
-    if tier is SemanticState.SHADE and sun_at_window is False:
-        return SemanticState.MEDIUM if lux >= medium else SemanticState.OPEN
-    return tier
-
 
 def is_night(now: datetime, open_time: dt_time, sunset_with_offset: datetime) -> bool:
     """True before `open_time` or at/after `sunset_with_offset` (today)."""
@@ -59,7 +53,7 @@ def resolve_desired_state(
 
     1. override active -> hold current
     2. night (before open_time or after sunset+offset) -> closed
-    3/4/5. lux tier via primary thresholds, gated by sun_at_window for SHADE
+    3/4/5. lux tier via primary thresholds
 
     Darkening (rank increases) is applied immediately. Lightening (rank
     decreases) is only applied if the *_reopen thresholds also call for it
@@ -72,13 +66,11 @@ def resolve_desired_state(
         return SemanticState.CLOSED
 
     raw = _tier(lux, thresholds.lux_high, thresholds.lux_medium)
-    raw = _gate_shade(raw, sun_at_window, lux, thresholds.lux_medium)
 
     if RANK[raw] >= RANK[current]:
         return raw
 
     raw_lighten = _tier(lux, thresholds.lux_high_reopen, thresholds.lux_medium_reopen)
-    raw_lighten = _gate_shade(raw_lighten, sun_at_window, lux, thresholds.lux_medium_reopen)
 
     if RANK[raw_lighten] < RANK[current]:
         return raw_lighten

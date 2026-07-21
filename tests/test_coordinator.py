@@ -210,46 +210,6 @@ async def test_missing_lux_sensor_defaults_to_open(monkeypatch):
     assert result["desired"] == SemanticState.OPEN
 
 
-async def test_sun_at_window_false_prevents_shade_but_allows_medium(monkeypatch):
-    hass = FakeHass()
-    hass.states.set("sensor.living_room_illuminance", "60000")  # would be SHADE without sun gating
-    hass.states.set("binary_sensor.living_room_sun_at_window", "off")
-    room = make_room(sun_sensor="binary_sensor.living_room_sun_at_window")
-    room.entities["enabled"] = FakeSwitch(True)
-
-    coord = _make_coordinator(monkeypatch, hass, room)
-    result = await coord._async_update_data()
-
-    assert result["desired"] == SemanticState.MEDIUM
-
-
-async def test_sun_at_window_true_allows_shade(monkeypatch):
-    hass = FakeHass()
-    hass.states.set("sensor.living_room_illuminance", "60000")
-    hass.states.set("binary_sensor.living_room_sun_at_window", "on")
-    room = make_room(sun_sensor="binary_sensor.living_room_sun_at_window")
-    room.entities["enabled"] = FakeSwitch(True)
-
-    coord = _make_coordinator(monkeypatch, hass, room)
-    result = await coord._async_update_data()
-
-    assert result["desired"] == SemanticState.SHADE
-
-
-async def test_sun_at_window_accepts_plain_sensor_true_false_state(monkeypatch):
-    # Some setups derive sun-at-window from a template `sensor` reporting
-    # the string "True"/"False" rather than a proper binary_sensor.
-    hass = FakeHass()
-    hass.states.set("sensor.living_room_illuminance", "60000")
-    hass.states.set("sensor.living_room_sun_at_window", "False")
-    room = make_room(sun_sensor="sensor.living_room_sun_at_window")
-    room.entities["enabled"] = FakeSwitch(True)
-
-    coord = _make_coordinator(monkeypatch, hass, room)
-    result = await coord._async_update_data()
-
-    assert result["desired"] == SemanticState.MEDIUM
-
 
 async def test_evaluation_reports_lux_value_in_result(monkeypatch):
     hass = FakeHass()

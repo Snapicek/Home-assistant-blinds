@@ -105,16 +105,6 @@ class ChainedBlindsCoordinator(DataUpdateCoordinator[dict]):
         except (TypeError, ValueError):
             lux = 0.0
 
-        sun_at_window: bool | None = None
-        if room.sun_sensor:
-            sun_state = self.hass.states.get(room.sun_sensor)
-            # Accepts a real binary_sensor ("on"/"off") as well as a plain
-            # sensor exposing a boolean-ish string ("true"/"false"), since
-            # some setups derive sun-at-window from a template sensor rather
-            # than a binary_sensor.
-            sun_at_window = (
-                sun_state.state.lower() in ("on", "true") if sun_state is not None else None
-            )
 
         now = dt_util.now()
 
@@ -152,7 +142,7 @@ class ChainedBlindsCoordinator(DataUpdateCoordinator[dict]):
         desired = resolve_desired_state(
             now=now,
             lux=lux,
-            sun_at_window=sun_at_window,
+            sun_at_window=None,
             current=current,
             open_time=open_time,
             sunset_with_offset=self._sunset_with_offset(now),

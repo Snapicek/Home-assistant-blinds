@@ -31,7 +31,6 @@ RANK: dict[SemanticState, int] = {
 CONF_LEFT_COVER = "left_cover"
 CONF_RIGHT_COVER = "right_cover"
 CONF_LUX_SENSOR = "lux_sensor"
-CONF_SUN_SENSOR = "sun_sensor"
 
 # Default calibrated raw positions (%), per semantic state. Must be tuned
 # per physical cover — these are just seed values for the number entities.

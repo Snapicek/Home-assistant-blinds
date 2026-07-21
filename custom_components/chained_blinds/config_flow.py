@@ -1,11 +1,10 @@
 """Config flow for Chained Blinds.
 
 Each config entry represents one room: a required "left" cover, an optional
-"right" cover, a required lux sensor, and an optional sun-at-window sensor
-(a `binary_sensor`, or a plain `sensor` reporting "true"/"false"). Everything
-else (thresholds, dwell, calibration, enable, override)
-is exposed as live-tunable entities created by the number/select/switch/time
-platforms, not as config-entry data -- see const.py's *_NUMBER_SPECS.
+"right" cover, and a required lux sensor. Everything else (thresholds, dwell,
+calibration, enable, override) is exposed as live-tunable entities created by
+the number/select/switch/time platforms, not as config-entry data -- see
+const.py's *_NUMBER_SPECS.
 """
 from __future__ import annotations
 
@@ -17,7 +16,7 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 
-from .const import CONF_LEFT_COVER, CONF_LUX_SENSOR, CONF_RIGHT_COVER, CONF_SUN_SENSOR, DOMAIN
+from .const import CONF_LEFT_COVER, CONF_LUX_SENSOR, CONF_RIGHT_COVER, DOMAIN
 
 
 def _build_schema(current: dict[str, Any]) -> vol.Schema:
@@ -31,12 +30,7 @@ def _build_schema(current: dict[str, Any]) -> vol.Schema:
             ): selector.EntitySelector(selector.EntitySelectorConfig(domain="cover")),
             vol.Required(
                 CONF_LUX_SENSOR, default=current.get(CONF_LUX_SENSOR, "")
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
-            vol.Optional(
-                CONF_SUN_SENSOR, default=current.get(CONF_SUN_SENSOR, "")
-            ): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
-            ),
+            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="illuminance")),
         }
     )
 

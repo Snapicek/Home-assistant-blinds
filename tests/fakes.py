@@ -99,7 +99,6 @@ def make_room(**overrides):
         left_cover="cover.living_room_left_blind",
         right_cover=None,
         lux_sensor="sensor.living_room_illuminance",
-        sun_sensor=None,
         store=FakeStore(),
     )
     defaults.update(overrides)

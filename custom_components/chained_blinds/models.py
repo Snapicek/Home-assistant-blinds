@@ -23,7 +23,6 @@ class RoomRuntimeData:
     left_cover: str
     right_cover: str | None
     lux_sensor: str
-    sun_sensor: str | None
     store: Store
 
     # Tracked state (rule 10: only written when a real move happens).

@@ -9,7 +9,6 @@ from custom_components.chained_blinds.const import (
     CONF_LEFT_COVER,
     CONF_LUX_SENSOR,
     CONF_RIGHT_COVER,
-    CONF_SUN_SENSOR,
 )
 
 
@@ -27,17 +26,6 @@ def test_validate_passes_with_only_required_fields():
     )
     assert errors == {}
 
-
-def test_validate_does_not_require_optional_fields():
-    errors = _validate(
-        {
-            CONF_LEFT_COVER: "cover.living_room_left_blind",
-            CONF_LUX_SENSOR: "sensor.living_room_illuminance",
-            CONF_RIGHT_COVER: "",
-            CONF_SUN_SENSOR: "",
-        }
-    )
-    assert errors == {}
 
 
 def test_title_single_cover():
@@ -69,4 +57,3 @@ def test_build_schema_prefills_current_values():
     assert defaults[CONF_LEFT_COVER] == "cover.living_room_left_blind"
     assert defaults[CONF_LUX_SENSOR] == "sensor.living_room_illuminance"
     assert defaults[CONF_RIGHT_COVER] == ""
-    assert defaults[CONF_SUN_SENSOR] == ""

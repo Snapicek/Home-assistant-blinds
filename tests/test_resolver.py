@@ -3,7 +3,7 @@
 These tests are the executable spec for the resolver: the original prompt
 described the rules in prose but no reference blueprint YAML implementing
 them was ever committed, so these cases pin down the exact combining
-behaviour (hysteresis, dwell direction, sun-gating, night window) instead of
+behaviour (hysteresis, dwell direction, night window) instead of
 leaving it ambiguous.
 """
 from datetime import datetime, time as dt_time
@@ -110,22 +110,6 @@ def test_darkening_applies_immediately_no_hysteresis_needed():
     # current=OPEN, lux jumps straight to SHADE-tier: darkening, always allowed.
     assert _resolve(now=now, lux=5000, current=OPEN) == SHADE
 
-
-# --- sun-at-window gating of SHADE ----------------------------------------
-
-def test_sun_at_window_none_treated_as_always_true():
-    now = datetime(2026, 7, 21, 12, 0)
-    assert _resolve(now=now, lux=5000, current=OPEN, sun_at_window=None) == SHADE
-
-
-def test_sun_at_window_false_suppresses_shade_falls_back_to_medium():
-    now = datetime(2026, 7, 21, 12, 0)
-    assert _resolve(now=now, lux=5000, current=OPEN, sun_at_window=False) == MEDIUM
-
-
-def test_sun_at_window_false_still_allows_medium():
-    now = datetime(2026, 7, 21, 12, 0)
-    assert _resolve(now=now, lux=300, current=OPEN, sun_at_window=False) == MEDIUM
 
 
 # --- hysteresis on lightening ----------------------------------------------

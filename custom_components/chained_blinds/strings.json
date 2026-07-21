@@ -1,14 +1,13 @@
-{
+i{
   "config": {
     "step": {
       "user": {
         "title": "Add a room",
-        "description": "Pick the cover(s) this automation should control, the lux sensor driving it, and (optionally) a sun-at-window binary sensor. Thresholds, dwell times, calibration, enable, and manual override are configured afterwards as dashboard entities.",
+        "description": "Pick the cover(s) this automation should control and the lux sensor driving it. Thresholds, dwell times, calibration, enable, and manual override are configured afterwards as dashboard entities.",
         "data": {
           "left_cover": "Left/primary cover",
           "right_cover": "Right cover (optional)",
-          "lux_sensor": "Lux sensor",
-          "sun_sensor": "Sun-at-window sensor (optional, binary_sensor or true/false sensor)"
+          "lux_sensor": "Lux sensor"
         }
       }
     },
@@ -26,8 +25,7 @@
         "data": {
           "left_cover": "Left/primary cover",
           "right_cover": "Right cover (optional)",
-          "lux_sensor": "Lux sensor",
-          "sun_sensor": "Sun-at-window sensor (optional, binary_sensor or true/false sensor)"
+          "lux_sensor": "Lux sensor"
         }
       }
     },

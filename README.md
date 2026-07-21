@@ -11,7 +11,7 @@
 
 A Home Assistant custom integration for **chain-driven motorized blinds** where both 0 % and 100 % are fully dark and the position of maximum light differs per physical cover and must be calibrated individually.
 
-The integration automatically moves your covers through four semantic states based on a lux sensor, sun position, and configurable thresholds — all tunable live from the dashboard without restarting Home Assistant.
+The integration automatically moves your covers through four semantic states based on a lux sensor and configurable thresholds — all tunable live from the dashboard without restarting Home Assistant.
 
 ---
 
@@ -20,7 +20,6 @@ The integration automatically moves your covers through four semantic states bas
 - **Four semantic states** — `open`, `medium`, `shade`, `closed` — mapped to per-cover calibrated raw positions.
 - **Automatic lux-based control** — moves covers darker as light increases, lighter when light drops, using separate thresholds for each direction (hysteresis).
 - **Dwell lock** — prevents rapid down→up→down cycling that can damage chain-drive mechanisms.
-- **Sun-at-window gating** — optional binary sensor to skip darkening when the sun is not directly on the window.
 - **Night window** — configurable time range during which the integration holds the blind closed regardless of lux.
 - **Manual override** — dedicated switch holds the current position for a configurable number of minutes, then auto-clears; no external `timer` helper needed.
 - **Fully UI-configured** — Config Flow setup, all thresholds and calibration values adjustable via dashboard entities (no YAML editing).
@@ -35,7 +34,6 @@ The integration automatically moves your covers through four semantic states bas
 | Home Assistant | ≥ 2026.5 |
 | A lux sensor entity | e.g. `sensor.living_room_illuminance` |
 | One or two `cover` entities | Chain-driven roller blind(s) |
-| *(Optional)* Sun-at-window sensor | `binary_sensor`, or a `sensor` reporting `true`/`false`; gates darkening moves |
 
 ---
 
@@ -65,11 +63,10 @@ The integration automatically moves your covers through four semantic states bas
 1. Go to **Settings → Devices & Services → Add Integration**.
 2. Search for **Chained Blinds Controller** and select it.
 3. Fill in the config form:
-   - **Room name** — used as the prefix for all created entities.
-   - **Left cover** *(required)* — a `cover` entity.
-   - **Right cover** *(optional)* — second `cover` entity; moves 1 s after the left one.
-   - **Lux sensor** — a `sensor` entity reporting illuminance in lux.
-   - **Sun-at-window sensor** *(optional)* — a `binary_sensor`, or a `sensor` reporting `true`/`false`; when off the integration will not darken.
+    - **Room name** — used as the prefix for all created entities.
+    - **Left cover** *(required)* — a `cover` entity.
+    - **Right cover** *(optional)* — second `cover` entity; moves 1 s after the left one.
+    - **Lux sensor** — a `sensor` entity reporting illuminance in lux.
 4. Click **Submit**. A new device appears under **Devices & Services**.
 
 You can change any of these settings at any time via the integration's **Configure** button.
@@ -110,13 +107,12 @@ All changes take effect on the next evaluation cycle — no restart or reload ne
 
 Covers are moved only via `cover.set_cover_position` with an explicit calibrated percentage — never `open_cover`/`close_cover`. This guarantees physical accuracy regardless of the cover's internal state tracking.
 
-The resolver evaluates the following priority order on every 5-minute poll **and** whenever the lux sensor or sun-at-window sensor changes:
+The resolver evaluates the following priority order on every 5-minute poll **and** whenever the lux sensor changes:
 
 1. **Night window** — if the current time is inside the configured night range, target state is `closed`.
-2. **Sun-at-window** — if the optional sensor is `off`, the resolver does not darken (but may still lighten).
-3. **Lux thresholds** — compares the smoothed lux value against `lux_close` (to darken) and `lux_reopen` (to lighten).
-4. **Dwell lock** — a lightening move is only issued if at least `dwell_minutes` have elapsed since the last move.
-5. **Manual override** — if `switch.<room>_override` is on, no automatic moves are issued until it turns off.
+2. **Lux thresholds** — compares the smoothed lux value against `lux_close` (to darken) and `lux_reopen` (to lighten).
+3. **Dwell lock** — a lightening move is only issued if at least `dwell_minutes` have elapsed since the last move.
+4. **Manual override** — if `switch.<room>_override` is on, no automatic moves are issued until it turns off.
 
 | State | Rank | Description |
 |---|---|---|
