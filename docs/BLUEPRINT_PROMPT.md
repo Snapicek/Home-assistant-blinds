@@ -1,3 +1,10 @@
+> **Superseded:** this project moved from a YAML-automation-blueprint
+> approach to a real Python custom integration
+> (`custom_components/chained_blinds/`), installable via HACS. See the
+> top-level [`README.md`](../README.md) for current status and docs. This
+> file is kept as the original design/rules reference the integration's
+> `resolver.py` was ported from.
+
 # Chained Blinds — Blueprint Generator Prompt
 
 This is a reusable prompt for generating or editing the Home Assistant
