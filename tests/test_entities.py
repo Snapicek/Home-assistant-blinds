@@ -32,6 +32,7 @@ def test_number_entity_wires_spec_onto_attributes():
 
     assert entity.unique_id == f"{room.entry_id}_{spec.key}"
     assert entity.native_value == spec.default
+    assert isinstance(entity.native_value, int)
     assert entity.native_min_value == spec.min_value
     assert entity.native_max_value == spec.max_value
     assert entity.device_info["identifiers"] == {(DOMAIN, room.entry_id)}
@@ -106,7 +107,8 @@ async def test_number_entity_rounds_values_for_integer_precision_spec():
     entity = ChainedBlindsNumber(room, spec)
     disable_ha_state_writes(entity)
     await entity.async_set_native_value(1234.7)
-    assert entity.native_value == 1235.0
+    assert entity.native_value == 1235
+    assert isinstance(entity.native_value, int)
 
 
 def test_enabled_switch_has_correct_icon():

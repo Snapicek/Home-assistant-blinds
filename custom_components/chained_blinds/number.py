@@ -31,12 +31,12 @@ class ChainedBlindsNumber(NumberEntity, RestoreEntity):
     _attr_has_entity_name = True
     _attr_mode = NumberMode.BOX
 
-    def _normalize_native_value(self, value: float) -> float:
+    def _normalize_native_value(self, value: float) -> int | float:
         precision = self._spec.suggested_display_precision
         if precision is None:
             return float(value)
         if precision == 0:
-            return float(round(value))
+            return int(round(value))
         return round(float(value), precision)
 
     def __init__(self, room: RoomRuntimeData, spec: NumberSpec) -> None:
