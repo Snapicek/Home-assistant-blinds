@@ -54,7 +54,7 @@ async def test_override_active_holds(monkeypatch):
 
 async def test_first_evaluation_moves_immediately(monkeypatch):
     hass = FakeHass()
-    hass.states.set("sensor.lux", "5000")  # bright -> SHADE
+    hass.states.set("sensor.lux", "60000")  # bright -> SHADE
     room = make_room()
     room.entities["enabled"] = FakeSwitch(True)
 
@@ -87,7 +87,7 @@ async def test_dwell_lock_blocks_a_too_soon_lightening_move(monkeypatch):
 
 async def test_darkening_move_applies_after_short_dwell(monkeypatch):
     hass = FakeHass()
-    hass.states.set("sensor.lux", "5000")  # bright -> SHADE, a darkening from MEDIUM
+    hass.states.set("sensor.lux", "60000")  # bright -> SHADE, a darkening from MEDIUM
     room = make_room()
     room.current_state = SemanticState.MEDIUM
     room.last_move_time = NOON - timedelta(minutes=15)
@@ -100,3 +100,56 @@ async def test_darkening_move_applies_after_short_dwell(monkeypatch):
 
     assert result["moved"] is True
     assert room.current_state == SemanticState.SHADE
+
+
+async def test_seasonal_split_changes_thresholds_by_month(monkeypatch):
+    # January: winter factor lowers thresholds, so 30k lux should darken to SHADE.
+    hass_winter = FakeHass()
+    hass_winter.states.set("sensor.lux", "30000")
+    room_winter = make_room()
+    room_winter.current_state = SemanticState.MEDIUM
+    room_winter.entities["enabled"] = FakeSwitch(True)
+    room_winter.entities["seasonal_split"] = FakeSwitch(True)
+    room_winter.entities["summer_lux_factor"] = FakeNumber(1.5)
+    room_winter.entities["winter_lux_factor"] = FakeNumber(0.5)
+
+    winter_now = datetime(2026, 1, 21, 12, 0)
+    coord_winter = _make_coordinator(monkeypatch, hass_winter, room_winter, now=winter_now)
+    winter_result = await coord_winter._async_update_data()
+
+    assert winter_result["desired"] == SemanticState.SHADE
+    assert winter_result["moved"] is True
+
+    # July: summer factor raises thresholds, so the same 30k lux should hold MEDIUM.
+    hass_summer = FakeHass()
+    hass_summer.states.set("sensor.lux", "30000")
+    room_summer = make_room()
+    room_summer.current_state = SemanticState.MEDIUM
+    room_summer.entities["enabled"] = FakeSwitch(True)
+    room_summer.entities["seasonal_split"] = FakeSwitch(True)
+    room_summer.entities["summer_lux_factor"] = FakeNumber(1.5)
+    room_summer.entities["winter_lux_factor"] = FakeNumber(0.5)
+
+    summer_now = datetime(2026, 7, 21, 12, 0)
+    coord_summer = _make_coordinator(monkeypatch, hass_summer, room_summer, now=summer_now)
+    summer_result = await coord_summer._async_update_data()
+
+    assert summer_result["desired"] == SemanticState.MEDIUM
+    assert summer_result["moved"] is False
+
+
+async def test_sunrise_open_keeps_night_until_sunrise(monkeypatch):
+    hass = FakeHass()
+    hass.states.set("sensor.lux", "60000")
+    room = make_room()
+    room.entities["enabled"] = FakeSwitch(True)
+    room.entities["sunrise_open"] = FakeSwitch(True)
+
+    now = datetime(2026, 7, 21, 6, 0)
+    coord = _make_coordinator(monkeypatch, hass, room, now=now)
+    monkeypatch.setattr(coord, "_sunrise_with_offset", lambda now: datetime(2026, 7, 21, 7, 0))
+
+    result = await coord._async_update_data()
+
+    assert result["desired"] == SemanticState.CLOSED
+

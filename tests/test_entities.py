@@ -11,7 +11,12 @@ via pytest-homeassistant-custom-component.
 from custom_components.chained_blinds.const import DOMAIN, THRESHOLD_NUMBER_SPECS
 from custom_components.chained_blinds.number import ChainedBlindsNumber
 from custom_components.chained_blinds.select import ChainedBlindsStateSelect
-from custom_components.chained_blinds.switch import EnabledSwitch, OverrideSwitch
+from custom_components.chained_blinds.switch import (
+    EnabledSwitch,
+    OverrideSwitch,
+    SeasonalSplitSwitch,
+    SunriseOpenSwitch,
+)
 from custom_components.chained_blinds.time import OpenTimeEntity
 
 from .fakes import make_room
@@ -53,6 +58,20 @@ def test_override_switch_defaults_off():
     entity = OverrideSwitch(FakeHass(), room)
     assert entity.is_on is False
     assert entity.unique_id == f"{room.entry_id}_override"
+
+
+def test_seasonal_split_switch_defaults_off():
+    room = make_room()
+    entity = SeasonalSplitSwitch(room)
+    assert entity.is_on is False
+    assert entity.unique_id == f"{room.entry_id}_seasonal_split"
+
+
+def test_sunrise_open_switch_defaults_off():
+    room = make_room()
+    entity = SunriseOpenSwitch(room)
+    assert entity.is_on is False
+    assert entity.unique_id == f"{room.entry_id}_sunrise_open"
 
 
 def test_open_time_entity_defaults():

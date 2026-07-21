@@ -7,6 +7,8 @@ semantics without requiring the user to pre-create anything.
 """
 from __future__ import annotations
 
+from datetime import timedelta
+
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
@@ -14,8 +16,14 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, DEFAULT_OVERRIDE_DURATION_MINUTES
+from .const import (
+    DOMAIN,
+    DEFAULT_OVERRIDE_DURATION_MINUTES,
+    DEFAULT_SEASONAL_SPLIT,
+    DEFAULT_USE_SUNRISE_OPEN,
+)
 from .models import RoomRuntimeData
 
 
@@ -23,7 +31,14 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     room: RoomRuntimeData = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([EnabledSwitch(room), OverrideSwitch(hass, room)])
+    async_add_entities(
+        [
+            EnabledSwitch(room),
+            SeasonalSplitSwitch(room),
+            SunriseOpenSwitch(room),
+            OverrideSwitch(hass, room),
+        ]
+    )
 
 
 class _RoomSwitchBase(SwitchEntity, RestoreEntity):
@@ -66,6 +81,22 @@ class EnabledSwitch(_RoomSwitchBase):
         self._attr_icon = "mdi:auto-mode"
 
 
+class SeasonalSplitSwitch(_RoomSwitchBase):
+    """Enable summer/winter factors for lux thresholds."""
+
+    def __init__(self, room: RoomRuntimeData) -> None:
+        super().__init__(room, "seasonal_split", "Seasonal lux split", DEFAULT_SEASONAL_SPLIT)
+        self._attr_icon = "mdi:weather-partly-snowy-rainy"
+
+
+class SunriseOpenSwitch(_RoomSwitchBase):
+    """Use sunrise(+offset) as the morning open boundary instead of fixed time."""
+
+    def __init__(self, room: RoomRuntimeData) -> None:
+        super().__init__(room, "sunrise_open", "Use sunrise for open time", DEFAULT_USE_SUNRISE_OPEN)
+        self._attr_icon = "mdi:weather-sunset-up"
+
+
 class OverrideSwitch(_RoomSwitchBase):
     """On means "hold current position" -- checked first, before anything else."""
 
@@ -74,11 +105,40 @@ class OverrideSwitch(_RoomSwitchBase):
         self._attr_icon = "mdi:hand-back-right"
         self._hass = hass
         self._unsub_expiry: CALLBACK_TYPE | None = None
+        self._override_until = None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str]:
+        if self._override_until is None:
+            return {}
+        return {"override_until": self._override_until.isoformat()}
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        if self._attr_is_on:
-            self._schedule_expiry()
+        if not self._attr_is_on:
+            return
+
+        last_state = await self.async_get_last_state()
+        override_until_raw = (
+            last_state.attributes.get("override_until")
+            if last_state is not None
+            else None
+        )
+
+        if isinstance(override_until_raw, str):
+            override_until = dt_util.parse_datetime(override_until_raw)
+            if override_until is not None:
+                self._override_until = dt_util.as_utc(override_until)
+                remaining = (self._override_until - dt_util.utcnow()).total_seconds()
+                if remaining <= 0:
+                    self._override_until = None
+                    await super().async_turn_off()
+                    return
+                self._schedule_expiry(seconds=remaining)
+                return
+
+        # Legacy fallback: if no persisted deadline exists, keep old behavior.
+        self._schedule_expiry()
 
     async def async_will_remove_from_hass(self) -> None:
         self._cancel_expiry()
@@ -90,18 +150,24 @@ class OverrideSwitch(_RoomSwitchBase):
 
     async def async_turn_off(self, **kwargs) -> None:
         self._cancel_expiry()
+        self._override_until = None
         await super().async_turn_off(**kwargs)
 
     @callback
-    def _schedule_expiry(self) -> None:
+    def _schedule_expiry(self, *, seconds: float | None = None) -> None:
         self._cancel_expiry()
-        duration_entity = self._room.entities.get("override_duration_minutes")
-        minutes = (
-            duration_entity.native_value
-            if duration_entity is not None and duration_entity.native_value is not None
-            else DEFAULT_OVERRIDE_DURATION_MINUTES
-        )
-        self._unsub_expiry = async_call_later(self._hass, minutes * 60, self._async_expire)
+        if seconds is None:
+            duration_entity = self._room.entities.get("override_duration_minutes")
+            minutes = (
+                duration_entity.native_value
+                if duration_entity is not None and duration_entity.native_value is not None
+                else DEFAULT_OVERRIDE_DURATION_MINUTES
+            )
+            seconds = minutes * 60
+
+        self._override_until = dt_util.utcnow() + timedelta(seconds=seconds)
+        self._unsub_expiry = async_call_later(self._hass, seconds, self._async_expire)
+        self.async_write_ha_state()
 
     @callback
     def _cancel_expiry(self) -> None:
@@ -111,4 +177,5 @@ class OverrideSwitch(_RoomSwitchBase):
 
     async def _async_expire(self, _now) -> None:
         self._unsub_expiry = None
+        self._override_until = None
         await super().async_turn_off()

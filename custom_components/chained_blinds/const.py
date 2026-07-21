@@ -61,8 +61,13 @@ DEFAULT_LUX_HIGH_REOPEN = 21000.0
 DEFAULT_DWELL_MINUTES = 10.0
 DEFAULT_REOPEN_DWELL_MINUTES = 30.0
 DEFAULT_SUNSET_OFFSET_MINUTES = 0.0
+DEFAULT_SUNRISE_OFFSET_MINUTES = 0.0
 DEFAULT_OVERRIDE_DURATION_MINUTES = 60.0
 DEFAULT_OPEN_TIME = dt_time(7, 0)
+DEFAULT_SUMMER_LUX_FACTOR = 1.15
+DEFAULT_WINTER_LUX_FACTOR = 0.85
+DEFAULT_SEASONAL_SPLIT = False
+DEFAULT_USE_SUNRISE_OPEN = False
 
 COVER_ROLES = ("left", "right")
 
@@ -111,6 +116,21 @@ THRESHOLD_NUMBER_SPECS: tuple[NumberSpec, ...] = (
         "sunset_offset_minutes", "Sunset offset",
         DEFAULT_SUNSET_OFFSET_MINUTES, -180, 180, 1, "min",
         icon="mdi:weather-sunset",
+    ),
+    NumberSpec(
+        "sunrise_offset_minutes", "Sunrise offset",
+        DEFAULT_SUNRISE_OFFSET_MINUTES, -180, 180, 1, "min",
+        icon="mdi:weather-sunset-up",
+    ),
+    NumberSpec(
+        "summer_lux_factor", "Summer lux factor",
+        DEFAULT_SUMMER_LUX_FACTOR, 0.2, 3.0, 0.05,
+        icon="mdi:weather-sunny",
+    ),
+    NumberSpec(
+        "winter_lux_factor", "Winter lux factor",
+        DEFAULT_WINTER_LUX_FACTOR, 0.2, 3.0, 0.05,
+        icon="mdi:weather-snowy",
     ),
     NumberSpec(
         "override_duration_minutes", "Override duration",
