@@ -126,7 +126,10 @@ async def test_number_entity_resets_to_default_when_restored_value_is_out_of_ran
         state = "1.15"
         attributes = {}
 
-    entity.async_get_last_state = lambda: _FakeLastState()  # type: ignore[assignment]
+    async def _fake_async_get_last_state():
+        return _FakeLastState()
+
+    entity.async_get_last_state = _fake_async_get_last_state  # type: ignore[assignment]
     entity.async_write_ha_state = lambda: None
 
     await entity.async_added_to_hass()
