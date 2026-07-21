@@ -1,0 +1,68 @@
+"""Runtime data shared between the coordinator and this integration's own
+entities for a single config entry (= one room)."""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import TYPE_CHECKING, Any
+
+from homeassistant.helpers.storage import Store
+
+from .const import SemanticState
+
+if TYPE_CHECKING:
+    from .coordinator import ChainedBlindsCoordinator
+
+
+@dataclass
+class RoomRuntimeData:
+    """Static wiring + mutable tracked state for one config entry."""
+
+    entry_id: str
+    name: str
+    left_cover: str
+    right_cover: str | None
+    lux_sensor: str
+    sun_sensor: str | None
+    store: Store
+
+    # Tracked state (rule 10: only written when a real move happens).
+    current_state: SemanticState | None = None
+    last_move_time: datetime | None = None
+
+    # Populated by the number/select/switch/time platforms during
+    # async_setup_entry so the coordinator can read live values directly off
+    # the entity objects instead of round-tripping through entity_ids.
+    entities: dict[str, Any] = field(default_factory=dict)
+
+    coordinator: "ChainedBlindsCoordinator | None" = None
+
+    @property
+    def cover_roles(self) -> list[str]:
+        roles = ["left"]
+        if self.right_cover:
+            roles.append("right")
+        return roles
+
+    async def async_load_persisted(self) -> None:
+        """Restore current_state/last_move_time saved before a restart."""
+        data = await self.store.async_load()
+        if not data:
+            return
+        state = data.get("current_state")
+        if state is not None:
+            self.current_state = SemanticState(state)
+        moved_at = data.get("last_move_time")
+        if moved_at is not None:
+            self.last_move_time = datetime.fromisoformat(moved_at)
+
+    async def async_persist(self) -> None:
+        """Save current_state/last_move_time so dwell survives a restart."""
+        await self.store.async_save(
+            {
+                "current_state": self.current_state,
+                "last_move_time": (
+                    self.last_move_time.isoformat() if self.last_move_time else None
+                ),
+            }
+        )
