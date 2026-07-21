@@ -1,11 +1,52 @@
-# Blueprint prompt
+# Chained Blinds — Blueprint Generator Prompt
 
-Paste this to an LLM to generate or edit a Home Assistant **automation
-blueprint** for these chained blinds. Fill the `<<< >>>` request line at the
-bottom.
+This is a reusable prompt for generating or editing the Home Assistant
+**automation blueprint** that drives these chained blinds. To use it:
 
----
+1. Fill in the `<<< REQUEST: ... >>>` line at the bottom of the fenced block
+   below with what you want built or changed.
+2. Copy the entire fenced block and paste it to an LLM.
+3. Save the YAML it returns as the blueprint file (e.g.
+   `blueprints/automation/chained_blinds.yaml`).
 
+## Required Home Assistant helpers
+
+The generated blueprint assumes these helper entities already exist (create
+them as HA "Helpers" before running the blueprint):
+
+| Helper | Purpose |
+| --- | --- |
+| `input_select` | Tracks the current semantic state (`open`/`medium`/`shade`/`closed`); written only on an actual move so `last_changed` = last move time. |
+| `input_boolean` | Automation enable switch (plus any optional feature toggles, e.g. `soft_open`, if requested). |
+| `input_number` | Lux thresholds (MEDIUM/HIGH and their `*_reopen` hysteresis counterparts) and dwell timers (`reopen_dwell_minutes`, etc.) — all live-tunable from a dashboard. |
+| `input_datetime` | `open_time` and any other live-tunable time-of-day values. |
+| `timer` | Manual override — while `active`, the automation holds and does nothing. |
+| `sensor` (lux) | Smoothed illuminance input driving the resolver. |
+| `binary_sensor` (optional) | Sun-at-window signal; treated as always-true when not configured. |
+
+## Semantic states
+
+Each cover maps every state to its own calibrated position — two covers in a
+room always move to the same *state*, never the same raw percentage.
+
+| State | Rank | Meaning |
+| --- | --- | --- |
+| `open` | 0 | Straight/max light, ~75% (differs per cover — never 100%). |
+| `medium` | 1 | Partially closed. |
+| `shade` | 2 | Sun-blocking position. |
+| `closed` | 3 | Fully dark, 0%. |
+
+Darkening (moving to a higher rank) is allowed freely at any time; lightening
+(moving to a lower rank) is only allowed once the smoothed lux crosses the
+corresponding `*_reopen` threshold — this hysteresis plus the dwell lock is
+what prevents chain-load-damaging `down → up → down` cycling.
+
+## The prompt
+
+Copy everything inside the block below, fill in the `REQUEST` line, and paste
+it to an LLM.
+
+`````
 You are a Home Assistant blueprint engineer. Output ONE valid HA **automation
 blueprint** in YAML, nothing else (no prose, no ``` fences unless asked).
 
@@ -66,3 +107,17 @@ blueprint** in YAML, nothing else (no prose, no ``` fences unless asked).
 e.g. "Add an optional soft/stepped morning open: when going night→open and a new
 boolean input `soft_open` is on, step the covers up in ~6% increments over 15
 minutes (all one direction, chain-safe) instead of one jump." >>>
+`````
+
+## Worked examples
+
+Two illustrations of a filled-in `REQUEST` line (only the request changes —
+everything else in the fenced block above stays as-is):
+
+- *Soft morning open*: "Add an optional soft/stepped morning open: when going
+  night→open and a new boolean input `soft_open` is on, step the covers up in
+  ~6% increments over 15 minutes (all one direction, chain-safe) instead of
+  one jump."
+- *Rain override*: "Add an optional `rain_sensor` binary_sensor input; while
+  it's `on`, force `closed` regardless of lux, and hold that state through the
+  normal dwell lock — no reopening on rain until it clears."
