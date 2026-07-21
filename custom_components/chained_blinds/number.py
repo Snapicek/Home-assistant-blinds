@@ -31,6 +31,14 @@ class ChainedBlindsNumber(NumberEntity, RestoreEntity):
     _attr_has_entity_name = True
     _attr_mode = NumberMode.BOX
 
+    def _normalize_native_value(self, value: float) -> float:
+        precision = self._spec.suggested_display_precision
+        if precision is None:
+            return float(value)
+        if precision == 0:
+            return float(round(value))
+        return round(float(value), precision)
+
     def __init__(self, room: RoomRuntimeData, spec: NumberSpec) -> None:
         self._room = room
         self._spec = spec
@@ -41,7 +49,7 @@ class ChainedBlindsNumber(NumberEntity, RestoreEntity):
         self._attr_native_max_value = spec.max_value
         self._attr_native_step = spec.step
         self._attr_native_unit_of_measurement = spec.unit
-        self._attr_native_value = spec.default
+        self._attr_native_value = self._normalize_native_value(spec.default)
         if spec.suggested_display_precision is not None:
             self._attr_suggested_display_precision = spec.suggested_display_precision
         if spec.icon:
@@ -55,10 +63,10 @@ class ChainedBlindsNumber(NumberEntity, RestoreEntity):
         self._room.entities[self._spec.key] = self
         if (last_state := await self.async_get_last_state()) is not None:
             try:
-                self._attr_native_value = float(last_state.state)
+                self._attr_native_value = self._normalize_native_value(float(last_state.state))
             except (TypeError, ValueError):
                 pass
 
     async def async_set_native_value(self, value: float) -> None:
-        self._attr_native_value = value
+        self._attr_native_value = self._normalize_native_value(value)
         self.async_write_ha_state()

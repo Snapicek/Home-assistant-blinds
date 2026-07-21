@@ -97,7 +97,15 @@ def test_number_entity_uses_spec_entity_category_and_precision():
     spec = THRESHOLD_NUMBER_SPECS[0]  # lux_medium
     entity = ChainedBlindsNumber(room, spec)
     assert entity.entity_category == EntityCategory.CONFIG
-    assert entity.suggested_display_precision == 0
+    assert getattr(entity, "_attr_suggested_display_precision", None) == 0
+
+
+async def test_number_entity_rounds_values_for_integer_precision_spec():
+    room = make_room()
+    spec = THRESHOLD_NUMBER_SPECS[0]  # lux_medium
+    entity = ChainedBlindsNumber(room, spec)
+    await entity.async_set_native_value(1234.7)
+    assert entity.native_value == 1235.0
 
 
 def test_enabled_switch_has_correct_icon():
