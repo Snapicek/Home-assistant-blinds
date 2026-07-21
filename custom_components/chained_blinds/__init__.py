@@ -19,13 +19,16 @@ STORAGE_VERSION = 1
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up one room (config entry) from a config entry."""
     store = Store[dict](hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
+    # entry.options (written by the options flow) takes precedence over the
+    # original entry.data so that reconfiguration is actually applied.
+    config = {**entry.data, **entry.options}
     room = RoomRuntimeData(
         entry_id=entry.entry_id,
         name=entry.title,
-        left_cover=entry.data[CONF_LEFT_COVER],
-        right_cover=entry.data.get(CONF_RIGHT_COVER) or None,
-        lux_sensor=entry.data[CONF_LUX_SENSOR],
-        sun_sensor=entry.data.get(CONF_SUN_SENSOR) or None,
+        left_cover=config[CONF_LEFT_COVER],
+        right_cover=config.get(CONF_RIGHT_COVER) or None,
+        lux_sensor=config[CONF_LUX_SENSOR],
+        sun_sensor=config.get(CONF_SUN_SENSOR) or None,
         store=store,
     )
     await room.async_load_persisted()

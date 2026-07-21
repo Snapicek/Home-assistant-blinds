@@ -97,7 +97,9 @@ class ChainedBlindsOptionsFlow(config_entries.OptionsFlow):
             if not errors:
                 return self.async_create_entry(title="", data=user_input)
 
-        current = user_input or dict(self.config_entry.data)
+        # Merge options over data so that previously saved options are shown
+        # as current values rather than always reverting to initial config.
+        current = user_input or {**self.config_entry.data, **self.config_entry.options}
         return self.async_show_form(
             step_id="init", data_schema=_build_schema(current), errors=errors
         )
