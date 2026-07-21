@@ -23,7 +23,11 @@ def _make_coordinator(monkeypatch, hass, room, now=NOON):
     monkeypatch.setattr(coordinator_module.dt_util, "now", lambda: now)
     monkeypatch.setattr(coordinator_module.dt_util, "utcnow", lambda: now)
     monkeypatch.setattr(cover_control_module.dt_util, "utcnow", lambda: now)
-    coord = ChainedBlindsCoordinator(hass, room, FakeConfigEntry())
+    # Use room.config_entry (populated by make_room with test tuning data),
+    # not a fresh empty FakeConfigEntry -- otherwise config-driven values
+    # (thresholds, dwell, seasonal factors, etc.) silently fall back to
+    # hardcoded defaults regardless of what the test configured.
+    coord = ChainedBlindsCoordinator(hass, room, room.config_entry)
     monkeypatch.setattr(coord, "_sunset_with_offset", lambda now: FAR_FUTURE_SUNSET)
     return coord
 
