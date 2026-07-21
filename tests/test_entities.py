@@ -16,9 +16,6 @@ from custom_components.chained_blinds.select import ChainedBlindsStateSelect
 from custom_components.chained_blinds.switch import (
     EnabledSwitch,
     OverrideSwitch,
-    RampEnabledSwitch,
-    SeasonalSplitSwitch,
-    SunriseOpenSwitch,
 )
 from custom_components.chained_blinds.time import NonWorkdayOpenTimeEntity, OpenTimeEntity
 
@@ -56,33 +53,12 @@ def test_enabled_switch_defaults_on():
 
 
 def test_override_switch_defaults_off():
-    from .fakes import FakeHass
+    from .fakes import FakeConfigEntry, FakeHass
 
     room = make_room()
-    entity = OverrideSwitch(FakeHass(), room)
+    entity = OverrideSwitch(FakeHass(), room, FakeConfigEntry())
     assert entity.is_on is False
     assert entity.unique_id == f"{room.entry_id}_override"
-
-
-def test_seasonal_split_switch_defaults_off():
-    room = make_room()
-    entity = SeasonalSplitSwitch(room)
-    assert entity.is_on is False
-    assert entity.unique_id == f"{room.entry_id}_seasonal_split"
-
-
-def test_sunrise_open_switch_defaults_off():
-    room = make_room()
-    entity = SunriseOpenSwitch(room)
-    assert entity.is_on is False
-    assert entity.unique_id == f"{room.entry_id}_sunrise_open"
-
-
-def test_ramp_enabled_switch_defaults_off():
-    room = make_room()
-    entity = RampEnabledSwitch(room)
-    assert entity.is_on is False
-    assert entity.unique_id == f"{room.entry_id}_ramp_enabled"
 
 
 def test_open_time_entity_defaults():
@@ -160,24 +136,6 @@ def test_enabled_switch_has_correct_icon():
     entity = EnabledSwitch(room)
     assert entity.icon == "mdi:auto-mode"
 
-
-def test_seasonal_split_switch_has_correct_icon():
-    room = make_room()
-    entity = SeasonalSplitSwitch(room)
-    assert entity.icon == "mdi:weather-partly-snowy-rainy"
-
-
-def test_sunrise_open_switch_has_correct_icon():
-    room = make_room()
-    entity = SunriseOpenSwitch(room)
-    assert entity.icon == "mdi:weather-sunset-up"
-
-
-def test_maintenance_switches_are_configuration_entities():
-    room = make_room()
-    assert RampEnabledSwitch(room).entity_category == EntityCategory.CONFIG
-    assert SeasonalSplitSwitch(room).entity_category == EntityCategory.CONFIG
-    assert SunriseOpenSwitch(room).entity_category == EntityCategory.CONFIG
 
 
 def test_state_select_has_correct_icon():
