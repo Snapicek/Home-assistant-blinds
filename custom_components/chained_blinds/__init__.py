@@ -10,7 +10,13 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_LEFT_COVER, CONF_LUX_SENSOR, CONF_RIGHT_COVER, DOMAIN
+from .const import (
+    CONF_LEFT_COVER,
+    CONF_LUX_SENSOR,
+    CONF_RIGHT_COVER,
+    DOMAIN,
+    WORKDAY_SENSOR_ENTITY_ID,
+)
 from .coordinator import ChainedBlindsCoordinator
 from .helpers import elapsed_seconds
 from .models import RoomRuntimeData
@@ -46,7 +52,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = ChainedBlindsCoordinator(hass, room, entry)
     room.coordinator = coordinator
 
-    tracked_entities = [room.lux_sensor]
+    tracked_entities = [room.lux_sensor, WORKDAY_SENSOR_ENTITY_ID]
 
     async def _async_handle_tracked_state_change(event) -> None:
         await coordinator.async_request_refresh()

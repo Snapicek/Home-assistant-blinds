@@ -20,7 +20,7 @@ from custom_components.chained_blinds.switch import (
     SeasonalSplitSwitch,
     SunriseOpenSwitch,
 )
-from custom_components.chained_blinds.time import OpenTimeEntity
+from custom_components.chained_blinds.time import NonWorkdayOpenTimeEntity, OpenTimeEntity
 
 from .fakes import disable_ha_state_writes, make_room
 
@@ -92,6 +92,15 @@ def test_open_time_entity_defaults():
     entity = OpenTimeEntity(room)
     assert entity.native_value == time(7, 0)
     assert entity.unique_id == f"{room.entry_id}_open_time"
+
+
+def test_non_workday_open_time_entity_defaults():
+    from datetime import time
+
+    room = make_room()
+    entity = NonWorkdayOpenTimeEntity(room)
+    assert entity.native_value == time(9, 30)
+    assert entity.unique_id == f"{room.entry_id}_non_workday_open_time"
 
 
 def test_number_entity_icon_is_set_from_spec():

@@ -21,6 +21,7 @@ The integration automatically moves your covers through four semantic states bas
 - **Automatic lux-based control** — moves covers darker as light increases, lighter when light drops, using separate thresholds for each direction (hysteresis).
 - **Dwell lock** — prevents rapid down→up→down cycling that can damage chain-drive mechanisms.
 - **Night window** — configurable time range during which the integration holds the blind closed regardless of lux.
+- **Workday-aware mornings** — uses `binary_sensor.workday_sensor` to choose between normal and non-workday morning opening times.
 - **Manual override** — dedicated switch holds the current position for a configurable number of minutes, then auto-clears; no external `timer` helper needed.
 - **Optional gradual ramping** — when enabled, blinds move toward the target in configurable step sizes at configurable intervals.
 - **Fully UI-configured** — Config Flow setup, all thresholds and calibration values adjustable via dashboard entities (no YAML editing).
@@ -35,6 +36,7 @@ The integration automatically moves your covers through four semantic states bas
 | Home Assistant | ≥ 2026.5 |
 | A lux sensor entity | e.g. `sensor.living_room_illuminance` |
 | One or two `cover` entities | Chain-driven roller blind(s) |
+| Optional `binary_sensor.workday_sensor` | `on` = workday open time, `off` = non-workday open time |
 
 ---
 
@@ -95,7 +97,8 @@ main device view.
 | `switch.<room>_enabled` | Turn automatic blind control on or off |
 | `switch.<room>_override` | Temporarily pause automation while keeping the current blind position |
 | `select.<room>_state` | Manually move blinds to `open`, `medium`, `shade`, or `closed` |
-| `time.<room>_open_time` | Set the daily morning time when daytime behavior may resume |
+| `time.<room>_open_time` | Set morning opening time used when `binary_sensor.workday_sensor` is `on` |
+| `time.<room>_non_workday_open_time` | Set later morning opening time used when `binary_sensor.workday_sensor` is `off` |
 
 Settings entities are maintenance/configuration controls and are best kept in
 the device Settings section.
@@ -123,6 +126,8 @@ the device Settings section.
 Number entities display as whole numbers to reduce visual noise (for example
 `12000 lx` instead of `12000.0 lx`).
 
+If `binary_sensor.workday_sensor` does not exist, the integration falls back to the normal `time.<room>_open_time` behavior every day.
+
 ---
 
 ## How it works
@@ -132,12 +137,15 @@ Number entities display as whole numbers to reduce visual noise (for example
 
 Covers are moved only via `cover.set_cover_position` with an explicit calibrated percentage — never `open_cover`/`close_cover`. This guarantees physical accuracy regardless of the cover's internal state tracking.
 
-The resolver evaluates the following priority order on every 5-minute poll **and** whenever the lux sensor changes:
+The coordinator re-evaluates on every 5-minute poll **and** whenever the lux sensor or `binary_sensor.workday_sensor` changes. Effective morning open time is selected first: `time.<room>_open_time` on workdays, `time.<room>_non_workday_open_time` on non-workdays.
 
-1. **Night window** — if the current time is inside the configured night range, target state is `closed`.
-2. **Lux thresholds** — compares the smoothed lux value against `lux_close` (to darken) and `lux_reopen` (to lighten).
-3. **Dwell lock** — a lightening move is only issued if at least `dwell_minutes` have elapsed since the last move.
-4. **Manual override** — if `switch.<room>_override` is on, no automatic moves are issued until it turns off.
+Resolver/move priority then works like this:
+
+1. **Manual override** — if `switch.<room>_override` is on, current state is held.
+2. **Night window** — before effective morning open time, or after sunset boundary, target state is `closed`.
+3. **Lux thresholds** — compares lux against primary thresholds to darken immediately.
+4. **Reopen hysteresis** — lightening only happens after the lower `*_reopen` thresholds are crossed.
+5. **Dwell lock** — actual movement is delayed by `dwell_minutes` for darkening and `reopen_dwell_minutes` for lightening.
 
 | State | Rank | Description |
 |---|---|---|

@@ -10,6 +10,7 @@ from custom_components.chained_blinds.const import (
     CONF_LUX_SENSOR,
     CONF_RIGHT_COVER,
     DOMAIN,
+    WORKDAY_SENSOR_ENTITY_ID,
 )
 from custom_components.chained_blinds.switch import OverrideSwitch, _RoomSwitchBase
 
@@ -158,7 +159,7 @@ async def test_async_setup_entry_wires_listeners_and_refreshes_on_lux(monkeypatc
     lux_entities, lux_cb = next((ents, cb) for ents, cb in listeners if room.lux_sensor in ents)
     cover_entities, _ = next((ents, cb) for ents, cb in listeners if room.left_cover in ents)
 
-    assert lux_entities == [room.lux_sensor]
+    assert lux_entities == [room.lux_sensor, WORKDAY_SENSOR_ENTITY_ID]
     assert cover_entities == [room.left_cover, room.right_cover]
 
     await lux_cb(event={})

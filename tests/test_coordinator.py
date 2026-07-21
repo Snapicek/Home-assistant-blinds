@@ -188,6 +188,44 @@ async def test_sunrise_open_after_sunrise_allows_lux_evaluation(monkeypatch):
     assert result["moved"] is True
 
 
+async def test_workday_sensor_off_uses_non_workday_open_time(monkeypatch):
+    from datetime import time
+
+    hass = FakeHass()
+    hass.states.set("sensor.living_room_illuminance", "60000")
+    hass.states.set("binary_sensor.workday_sensor", "off")
+    room = make_room()
+    room.entities["enabled"] = FakeSwitch(True)
+    room.entities["open_time"] = FakeNumber(time(7, 0))
+    room.entities["non_workday_open_time"] = FakeNumber(time(9, 30))
+
+    at_0800 = datetime(2026, 7, 21, 8, 0)
+    coord = _make_coordinator(monkeypatch, hass, room, now=at_0800)
+    result = await coord._async_update_data()
+
+    assert result["desired"] == SemanticState.CLOSED
+    assert result["moved"] is True
+
+
+async def test_workday_sensor_on_uses_workday_open_time(monkeypatch):
+    from datetime import time
+
+    hass = FakeHass()
+    hass.states.set("sensor.living_room_illuminance", "60000")
+    hass.states.set("binary_sensor.workday_sensor", "on")
+    room = make_room()
+    room.entities["enabled"] = FakeSwitch(True)
+    room.entities["open_time"] = FakeNumber(time(7, 0))
+    room.entities["non_workday_open_time"] = FakeNumber(time(9, 30))
+
+    at_0800 = datetime(2026, 7, 21, 8, 0)
+    coord = _make_coordinator(monkeypatch, hass, room, now=at_0800)
+    result = await coord._async_update_data()
+
+    assert result["desired"] == SemanticState.SHADE
+    assert result["moved"] is True
+
+
 async def test_lux_sensor_unavailable_state_treated_as_zero(monkeypatch):
     hass = FakeHass()
     hass.states.set("sensor.living_room_illuminance", "unavailable")

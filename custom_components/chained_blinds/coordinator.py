@@ -21,6 +21,7 @@ from .const import (
     DEFAULT_LUX_HIGH_REOPEN,
     DEFAULT_LUX_MEDIUM,
     DEFAULT_LUX_MEDIUM_REOPEN,
+    DEFAULT_NON_WORKDAY_OPEN_TIME,
     DEFAULT_OPEN_TIME,
     DEFAULT_RAMP_ENABLED,
     DEFAULT_RAMP_INTERVAL_MINUTES,
@@ -34,6 +35,7 @@ from .const import (
     DEFAULT_WINTER_LUX_FACTOR_PERCENT,
     EVAL_INTERVAL,
     SemanticState,
+    WORKDAY_SENSOR_ENTITY_ID,
 )
 from .models import RoomRuntimeData
 from .resolver import Thresholds, resolve_desired_state, should_apply_move
@@ -114,11 +116,23 @@ class ChainedBlindsCoordinator(DataUpdateCoordinator[dict]):
         now = dt_util.now()
 
         open_time_entity = room.entities.get("open_time")
-        open_time = (
+        workday_open_time = (
             open_time_entity.native_value
             if open_time_entity is not None and open_time_entity.native_value is not None
             else DEFAULT_OPEN_TIME
         )
+        non_workday_open_time_entity = room.entities.get("non_workday_open_time")
+        non_workday_open_time = (
+            non_workday_open_time_entity.native_value
+            if non_workday_open_time_entity is not None
+            and non_workday_open_time_entity.native_value is not None
+            else DEFAULT_NON_WORKDAY_OPEN_TIME
+        )
+
+        workday_state = self.hass.states.get(WORKDAY_SENSOR_ENTITY_ID)
+        is_workday = workday_state is None or workday_state.state != "off"
+        open_time = workday_open_time if is_workday else non_workday_open_time
+
         if _is_on(room, "sunrise_open", DEFAULT_USE_SUNRISE_OPEN):
             # Keep resolver's pure time-of-day contract by passing only local HH:MM:SS.
             open_time = self._sunrise_with_offset(now).time().replace(tzinfo=None)
