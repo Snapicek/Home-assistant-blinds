@@ -51,6 +51,14 @@ Not yet done / needs a real Home Assistant instance to verify:
 - Full entity-lifecycle tests (`RestoreEntity` restore-on-add, config-flow
   FlowManager steps end-to-end) via `pytest-homeassistant-custom-component`.
 
+The `hacs` CI job checks readiness for the *official HACS default store*
+listing, not for adding this as your own custom repository (which works
+regardless of this job's result). It currently fails on things only you can
+set: repo description and topics (GitHub repo "About" section) and brand
+assets (a submission to the separate `home-assistant/brands` repo) — none of
+these block personal use, only official-store listing, so they're left as
+manual/optional follow-up.
+
 ## Design summary
 
 Each cover is controlled only via `cover.set_cover_position` with an
