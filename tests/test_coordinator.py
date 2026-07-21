@@ -12,7 +12,7 @@ from custom_components.chained_blinds import coordinator as coordinator_module
 from custom_components.chained_blinds.const import SemanticState
 from custom_components.chained_blinds.coordinator import ChainedBlindsCoordinator
 
-from .fakes import FakeHass, FakeNumber, FakeSwitch, make_room
+from .fakes import FakeHass, FakeNumber, FakeSwitch, FakeConfigEntry, make_room
 
 NOON = datetime(2026, 7, 21, 12, 0)
 FAR_FUTURE_SUNSET = datetime(2026, 7, 21, 23, 0)
@@ -20,7 +20,7 @@ FAR_FUTURE_SUNSET = datetime(2026, 7, 21, 23, 0)
 
 def _make_coordinator(monkeypatch, hass, room, now=NOON):
     monkeypatch.setattr(coordinator_module.dt_util, "now", lambda: now)
-    coord = ChainedBlindsCoordinator(hass, room)
+    coord = ChainedBlindsCoordinator(hass, room, FakeConfigEntry())
     monkeypatch.setattr(coord, "_sunset_with_offset", lambda now: FAR_FUTURE_SUNSET)
     return coord
 

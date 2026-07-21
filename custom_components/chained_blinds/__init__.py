@@ -43,7 +43,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Entity platforms populate room.entities during their async_setup_entry.
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    coordinator = ChainedBlindsCoordinator(hass, room)
+    coordinator = ChainedBlindsCoordinator(hass, room, entry)
     room.coordinator = coordinator
 
     tracked_entities = [room.lux_sensor]

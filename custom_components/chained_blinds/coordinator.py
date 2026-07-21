@@ -54,12 +54,13 @@ def _is_on(room: RoomRuntimeData, key: str, default: bool) -> bool:
 class ChainedBlindsCoordinator(DataUpdateCoordinator[dict]):
     """Runs one full evaluate-and-move cycle for a single room."""
 
-    def __init__(self, hass: HomeAssistant, room: RoomRuntimeData) -> None:
+    def __init__(self, hass: HomeAssistant, room: RoomRuntimeData, config_entry: ConfigEntry) -> None:
         super().__init__(
             hass,
             _LOGGER,
             name=f"chained_blinds_{room.entry_id}",
             update_interval=EVAL_INTERVAL,
+            config_entry=config_entry,
         )
         self.room = room
 

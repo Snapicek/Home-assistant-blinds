@@ -56,6 +56,19 @@ class FakeStore:
         self.saved = data
 
 
+class FakeConfigEntry:
+    """Minimal stand-in for homeassistant.config_entries.ConfigEntry.
+
+    Only needs to satisfy what DataUpdateCoordinator.__init__ accesses
+    (stores config_entry but does not call methods on it during init).
+    """
+
+    entry_id = "test_entry"
+    domain = "chained_blinds"
+    title = "Test Room"
+    state = "loaded"
+
+
 class FakeNumber:
     def __init__(self, value):
         self.native_value = value
