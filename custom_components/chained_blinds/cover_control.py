@@ -57,21 +57,29 @@ async def _async_apply_positions(
     # a manual move mid-automatic-move.
     room.last_move_time = dt_util.utcnow()
 
-    await hass.services.async_call(
-        "cover",
-        "set_cover_position",
-        {"entity_id": room.left_cover, "position": left_position},
-        blocking=True,
-    )
-
-    if room.right_cover and right_position is not None:
-        await asyncio.sleep(STAGGER_SECONDS)
+    # Flag that we're making an automation move so the manual-move detector
+    # can distinguish this from actual manual moves via state-changed events.
+    room._automation_move_in_progress = True
+    try:
         await hass.services.async_call(
             "cover",
             "set_cover_position",
-            {"entity_id": room.right_cover, "position": right_position},
+            {"entity_id": room.left_cover, "position": left_position},
             blocking=True,
         )
+
+        if room.right_cover and right_position is not None:
+            await asyncio.sleep(STAGGER_SECONDS)
+            await hass.services.async_call(
+                "cover",
+                "set_cover_position",
+                {"entity_id": room.right_cover, "position": right_position},
+                blocking=True,
+            )
+    finally:
+        # Brief delay to let state-changed events be processed while flag is still True.
+        await asyncio.sleep(0.5)
+        room._automation_move_in_progress = False
 
     # Keep dwell bookkeeping on every real move.
     if final_state is not None:

@@ -32,6 +32,10 @@ class RoomRuntimeData:
     last_move_time: datetime | None = None
     ramp_target_state: SemanticState | None = None
 
+    # Flag to distinguish automation-initiated moves from manual moves during
+    # state-changed event processing.
+    _automation_move_in_progress: bool = False
+
     # Populated by the switch/select platforms during async_setup_entry so the
     # coordinator can read the operational entities (enabled, override,
     # state_select) directly. All tuning now lives on config_entry, not here.

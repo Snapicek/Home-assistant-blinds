@@ -78,10 +78,36 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         cover_entities.append(room.right_cover)
 
     async def _async_handle_cover_state_change(event) -> None:
-        # Skip if the integration itself triggered the move recently.
-        if room.last_move_time is not None:
-            if elapsed_seconds(room.last_move_time, dt_util.utcnow()) < _MANUAL_MOVE_GRACE_SECONDS:
-                return
+        # Check if this state change is from our own automation move by checking the flag.
+        # During automation-initiated moves, the flag is set True. These moves should
+        # trigger mirroring but NOT pause activation. Real manual moves have the flag
+        # False and trigger both mirroring and pause.
+        if room._automation_move_in_progress:
+            # This is our own move (coordinator or select entity). Mirror to paired cover
+            # if needed, but don't activate pause/override.
+            if room.right_cover:
+                moved_entity_id = event.data.get("entity_id")
+                new_state = event.data.get("new_state")
+                position = (
+                    new_state.attributes.get("current_position")
+                    if new_state is not None
+                    else None
+                )
+                if position is not None:
+                    other_cover = (
+                        room.right_cover
+                        if moved_entity_id == room.left_cover
+                        else room.left_cover
+                    )
+                    await hass.services.async_call(
+                        "cover",
+                        "set_cover_position",
+                        {"entity_id": other_cover, "position": position},
+                        blocking=True,
+                    )
+            return
+
+        # Real manual move detected (flag is False).
         # Skip if automation is already paused.
         override = room.entities.get("override")
         if override is not None and override.is_on:
