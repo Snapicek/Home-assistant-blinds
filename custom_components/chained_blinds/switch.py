@@ -42,11 +42,11 @@ async def async_setup_entry(
 class _RoomSwitchBase(SwitchEntity, RestoreEntity):
     _attr_has_entity_name = True
 
-    def __init__(self, room: RoomRuntimeData, key: str, name: str, default: bool) -> None:
+    def __init__(self, room: RoomRuntimeData, key: str, translation_key: str, default: bool) -> None:
         self._room = room
         self._key = key
         self._attr_unique_id = f"{room.entry_id}_{key}"
-        self._attr_name = name
+        self._attr_translation_key = translation_key
         self._attr_is_on = default
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, room.entry_id)}, name=room.name
@@ -75,7 +75,7 @@ class EnabledSwitch(_RoomSwitchBase):
     """Master enable: off means the automatic resolver never moves the covers."""
 
     def __init__(self, room: RoomRuntimeData) -> None:
-        super().__init__(room, "enabled", "Automation enabled", True)
+        super().__init__(room, "enabled", "automation_enabled", True)
         self._attr_icon = "mdi:auto-mode"
 
 
@@ -83,7 +83,7 @@ class OverrideSwitch(_RoomSwitchBase):
     """On means "hold current position" -- checked first, before anything else."""
 
     def __init__(self, hass: HomeAssistant, room: RoomRuntimeData, entry: ConfigEntry) -> None:
-        super().__init__(room, "override", "Pause automation", False)
+        super().__init__(room, "override", "pause_automation", False)
         self._attr_icon = "mdi:hand-back-right"
         self._hass = hass
         self._entry = entry

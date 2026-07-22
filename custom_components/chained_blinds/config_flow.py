@@ -31,6 +31,7 @@ from .const import (
     CONF_RAMP_STEP_PERCENT,
     CONF_REOPEN_DWELL_MINUTES,
     CONF_RIGHT_COVER,
+    CONF_ROOM_NAME,
     CONF_SEASONAL_SPLIT,
     CONF_SUMMER_LUX_FACTOR,
     CONF_SUNRISE_OFFSET_MINUTES,
@@ -65,6 +66,9 @@ def _build_covers_sensor_schema(current: dict[str, Any]) -> vol.Schema:
     """Step 1: Covers and Lux Sensor."""
     return vol.Schema(
         {
+            vol.Optional(
+                CONF_ROOM_NAME, default=current.get(CONF_ROOM_NAME, "")
+            ): selector.TextSelector(),
             vol.Required(
                 CONF_LEFT_COVER, default=current.get(CONF_LEFT_COVER, "")
             ): selector.EntitySelector(selector.EntitySelectorConfig(domain="cover")),
@@ -224,7 +228,12 @@ def _validate(user_input: dict[str, Any]) -> dict[str, str]:
 
 
 def _title(user_input: dict[str, Any]) -> str:
-    """Generate config entry title from covers."""
+    """Generate config entry title: the room name if given, else fall back
+    to the covers so existing entries created before this field existed
+    keep working."""
+    room_name = user_input.get(CONF_ROOM_NAME)
+    if room_name:
+        return room_name
     left = user_input[CONF_LEFT_COVER]
     right = user_input.get(CONF_RIGHT_COVER)
     return f"Chained Blinds ({left} & {right})" if right else f"Chained Blinds ({left})"
@@ -454,7 +463,7 @@ class ChainedBlindsOptionsFlow(config_entries.OptionsFlow):
         """Reconfigure Step 7: Cover Calibration."""
         if user_input is not None:
             self._step_data.update(user_input)
-            return self.async_abort(reason="reconfigure_successful")
+            return self.async_create_entry(title=_title(self._step_data), data=self._step_data)
 
         # Determine cover roles for calibration step.
         cover_roles = ["left"]

@@ -28,6 +28,7 @@ RANK: dict[SemanticState, int] = {
 }
 
 # Config entry keys (structural, set via config/options flow).
+CONF_ROOM_NAME = "room_name"
 CONF_LEFT_COVER = "left_cover"
 CONF_RIGHT_COVER = "right_cover"
 CONF_LUX_SENSOR = "lux_sensor"
