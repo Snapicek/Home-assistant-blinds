@@ -63,17 +63,34 @@ The integration automatically moves your covers through four semantic states bas
 
 ## Configuration
 
+Setup takes just **two pages**:
+
 1. Go to **Settings → Devices & Services → Add Integration**.
 2. Search for **Chained Blinds Controller** and select it.
-3. Walk through the setup wizard:
-    - **Room name** *(optional)* — used for the device and every entity created for it, e.g. "Bedroom". Leave blank to fall back to a name derived from the cover entity IDs.
+3. **Page 1 — Room & devices:**
+    - **Room name** *(optional)* — used for the device and every entity created for it, e.g. "Bedroom".
     - **Left cover** *(required)* — a `cover` entity.
     - **Right cover** *(optional)* — second `cover` entity; moves 1 s after the left one.
-    - **Lux sensor** — a `sensor` entity reporting illuminance in lux.
-    - Lux thresholds, delay times, sun/scheduling, seasonal sensitivity, gradual movement, and per-cover calibration.
-4. Click **Submit** on the final step. A new device appears under **Devices & Services**.
+    - **Light sensor** — a `sensor` entity reporting illuminance in lux.
+4. **Page 2 — Calibration:** the raw position (0–100 %) each blind should take for the four states.
 
-Every one of the settings above — including the room name — can be changed later via the integration's **Configure** button, which walks through the same steps pre-filled with your current values. Reconfiguring applies immediately; no restart or reload is needed.
+That's it — all thresholds, delays, and scheduling start with sensible defaults.
+
+### Changing settings later
+
+Open the integration's **Configure** button to get a **settings menu** with focused pages:
+
+| Menu section | What's on it |
+|---|---|
+| 🏠 Room & devices | Room name, covers, light sensor |
+| ☀️ Light thresholds | Close/reopen brightness levels with hysteresis |
+| ⏱️ Delay times | Darkening/reopening delays, pause duration |
+| 🌅 Opening schedule | Workday & weekend opening times, sunrise/sunset offsets |
+| 🍂 Seasonal sensitivity | Summer/winter threshold factors |
+| 🐢 Gradual movement | Step-by-step motion instead of direct jumps |
+| 🎯 Position calibration | Per-blind raw positions for each state |
+
+Each page shows an explanation and the default under every field, **saves the moment you submit it**, and returns you to the menu — adjust one setting or all of them in a single visit, then choose *Finish*. Changes apply immediately; no restart needed.
 
 ### Entities
 

@@ -1,11 +1,16 @@
-"""Regression test for ChainedBlindsOptionsFlow persistence.
+"""Tests for the menu-based ChainedBlindsOptionsFlow.
 
 Drives the real ChainedBlindsOptionsFlow (against the real HA
-config_entries/data_entry_flow base classes, not a fake) through all 7
-reconfigure steps and asserts the final result actually persists the
-submitted values. This guards against a real regression where the final
-step returned `async_abort(...)` instead of `async_create_entry(...)`,
-silently discarding every value a user entered while "reconfiguring".
+config_entries/data_entry_flow base classes, not a fake) and asserts:
+- the entry point is a menu linking to every settings section,
+- submitting a section persists it immediately via
+  hass.config_entries.async_update_entry and returns to the menu,
+- the entry title follows the room name,
+- "finish" closes the flow.
+
+The persistence assertions guard against a real regression where the old
+wizard-style flow discarded every submitted value (async_abort instead of
+persisting).
 """
 from homeassistant.data_entry_flow import FlowResultType
 
@@ -18,54 +23,60 @@ from custom_components.chained_blinds.const import (
     CONF_LUX_MEDIUM,
     CONF_LUX_MEDIUM_REOPEN,
     CONF_LUX_SENSOR,
-    CONF_NON_WORKDAY_OPEN_TIME,
-    CONF_OPEN_TIME,
     CONF_OVERRIDE_DURATION_MINUTES,
-    CONF_RAMP_ENABLED,
-    CONF_RAMP_INTERVAL_MINUTES,
-    CONF_RAMP_STEP_PERCENT,
     CONF_REOPEN_DWELL_MINUTES,
     CONF_ROOM_NAME,
-    CONF_SEASONAL_SPLIT,
-    CONF_SUMMER_LUX_FACTOR,
-    CONF_SUNRISE_OFFSET_MINUTES,
-    CONF_SUNSET_OFFSET_MINUTES,
-    CONF_USE_SUNRISE_OPEN,
-    CONF_WINTER_LUX_FACTOR,
-    DEFAULT_NON_WORKDAY_OPEN_TIME,
-    DEFAULT_OPEN_TIME,
 )
+from tests.fakes import FakeHass
 
 
 class FakeConfigEntry:
-    """Minimal stand-in for config_entries.ConfigEntry: only .data/.options
-    are read by ChainedBlindsOptionsFlow."""
+    """Minimal stand-in for config_entries.ConfigEntry: the options flow
+    reads .data/.options and FakeConfigEntries writes .options/.title."""
 
     def __init__(self, data: dict) -> None:
         self.data = data
         self.options: dict = {}
+        self.title = "old title"
 
 
-def _base_entry() -> FakeConfigEntry:
-    return FakeConfigEntry(
+def _make_flow() -> tuple[ChainedBlindsOptionsFlow, FakeConfigEntry, FakeHass]:
+    entry = FakeConfigEntry(
         data={
             CONF_LEFT_COVER: "cover.bedroom_blind_left",
             CONF_LUX_SENSOR: "sensor.balcony_illuminance",
         }
     )
+    flow = ChainedBlindsOptionsFlow(entry)
+    hass = FakeHass()
+    flow.hass = hass
+    return flow, entry, hass
 
 
-async def _drive_to_completion(flow: ChainedBlindsOptionsFlow, room_name: str = "Bedroom"):
-    """Walk all 7 options-flow steps with representative input and return
-    the final flow result."""
-    await flow.async_step_init(
-        {
-            CONF_ROOM_NAME: room_name,
-            CONF_LEFT_COVER: "cover.bedroom_blind_left",
-            CONF_LUX_SENSOR: "sensor.balcony_illuminance",
-        }
-    )
-    await flow.async_step_reconfigure_lux(
+async def test_init_shows_menu_with_all_sections():
+    flow, _entry, _hass = _make_flow()
+
+    result = await flow.async_step_init()
+
+    assert result["type"] == FlowResultType.MENU
+    assert result["menu_options"] == [
+        "covers",
+        "lux_thresholds",
+        "dwell",
+        "sun_schedule",
+        "seasonal",
+        "ramp",
+        "calibration",
+        "finish",
+    ]
+
+
+async def test_section_submit_persists_immediately_and_returns_to_menu():
+    """The regression guard: submitting one section must write the merged
+    options to the entry right away."""
+    flow, entry, hass = _make_flow()
+
+    result = await flow.async_step_lux_thresholds(
         {
             CONF_LUX_MEDIUM: 15000,
             CONF_LUX_MEDIUM_REOPEN: 9000,
@@ -73,67 +84,70 @@ async def _drive_to_completion(flow: ChainedBlindsOptionsFlow, room_name: str = 
             CONF_LUX_HIGH_REOPEN: 25000,
         }
     )
-    await flow.async_step_reconfigure_dwell(
+
+    assert len(hass.config_entries.update_calls) == 1
+    assert entry.options[CONF_LUX_MEDIUM] == 15000
+    assert entry.options[CONF_LUX_HIGH_REOPEN] == 25000
+    # Structural data is carried into the merged options unchanged.
+    assert entry.options[CONF_LEFT_COVER] == "cover.bedroom_blind_left"
+    # Back at the hub menu, ready for the next section.
+    assert result["type"] == FlowResultType.MENU
+
+
+async def test_multiple_sections_accumulate():
+    flow, entry, _hass = _make_flow()
+
+    await flow.async_step_lux_thresholds(
+        {
+            CONF_LUX_MEDIUM: 15000,
+            CONF_LUX_MEDIUM_REOPEN: 9000,
+            CONF_LUX_HIGH: 40000,
+            CONF_LUX_HIGH_REOPEN: 25000,
+        }
+    )
+    await flow.async_step_dwell(
         {
             CONF_DWELL_MINUTES: 12,
             CONF_REOPEN_DWELL_MINUTES: 35,
             CONF_OVERRIDE_DURATION_MINUTES: 90,
         }
     )
-    await flow.async_step_reconfigure_sun(
+
+    assert entry.options[CONF_LUX_MEDIUM] == 15000
+    assert entry.options[CONF_DWELL_MINUTES] == 12
+
+
+async def test_room_name_updates_entry_title():
+    flow, entry, _hass = _make_flow()
+
+    await flow.async_step_covers(
         {
-            CONF_OPEN_TIME: DEFAULT_OPEN_TIME,
-            CONF_NON_WORKDAY_OPEN_TIME: DEFAULT_NON_WORKDAY_OPEN_TIME,
-            CONF_USE_SUNRISE_OPEN: False,
-            CONF_SUNRISE_OFFSET_MINUTES: 0,
-            CONF_SUNSET_OFFSET_MINUTES: 0,
-        }
-    )
-    await flow.async_step_reconfigure_seasonal(
-        {
-            CONF_SEASONAL_SPLIT: False,
-            CONF_SUMMER_LUX_FACTOR: 115,
-            CONF_WINTER_LUX_FACTOR: 85,
-        }
-    )
-    await flow.async_step_reconfigure_ramp(
-        {
-            CONF_RAMP_ENABLED: False,
-            CONF_RAMP_STEP_PERCENT: 20,
-            CONF_RAMP_INTERVAL_MINUTES: 5,
-        }
-    )
-    return await flow.async_step_reconfigure_calibration(
-        {
-            "left_open_pos": 80,
-            "left_medium_pos": 55,
-            "left_shade_pos": 30,
-            "left_closed_pos": 0,
+            CONF_ROOM_NAME: "Guest Room",
+            CONF_LEFT_COVER: "cover.bedroom_blind_left",
+            CONF_LUX_SENSOR: "sensor.balcony_illuminance",
         }
     )
 
-
-async def test_reconfigure_persists_submitted_values():
-    """The regression: reconfiguring must actually write entry.options,
-    not just show a success message."""
-    entry = _base_entry()
-    flow = ChainedBlindsOptionsFlow(entry)
-
-    result = await _drive_to_completion(flow)
-
-    assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["data"][CONF_LUX_MEDIUM] == 15000
-    assert result["data"][CONF_DWELL_MINUTES] == 12
-    assert result["data"][CONF_OVERRIDE_DURATION_MINUTES] == 90
-    assert result["data"]["left_open_pos"] == 80
+    assert entry.title == "Guest Room"
 
 
-async def test_reconfigure_title_reflects_new_room_name():
-    """Submitting a room name should update the entry title, matching the
-    entry point used for HA's device/entity naming."""
-    entry = _base_entry()
-    flow = ChainedBlindsOptionsFlow(entry)
+async def test_covers_section_validates_required_fields():
+    flow, entry, hass = _make_flow()
 
-    result = await _drive_to_completion(flow, room_name="Guest Room")
+    result = await flow.async_step_covers({CONF_ROOM_NAME: "X"})
 
-    assert result["title"] == "Guest Room"
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"] == {
+        CONF_LEFT_COVER: "required",
+        CONF_LUX_SENSOR: "required",
+    }
+    assert hass.config_entries.update_calls == []
+
+
+async def test_finish_closes_flow():
+    flow, _entry, _hass = _make_flow()
+
+    result = await flow.async_step_finish()
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "finished"
