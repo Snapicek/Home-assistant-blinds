@@ -63,18 +63,9 @@ The integration automatically moves your covers through four semantic states bas
 
 ## Configuration
 
-Setup takes just **two pages**:
-
 1. Go to **Settings → Devices & Services → Add Integration**.
 2. Search for **Chained Blinds Controller** and select it.
-3. **Page 1 — Room & devices:**
-    - **Room name** *(optional)* — used for the device and every entity created for it, e.g. "Bedroom".
-    - **Left cover** *(required)* — a `cover` entity.
-    - **Right cover** *(optional)* — second `cover` entity; moves 1 s after the left one.
-    - **Light sensor** — a `sensor` entity reporting illuminance in lux.
-4. **Page 2 — Calibration:** the raw position (0–100 %) each blind should take for the four states.
-
-That's it — all thresholds, delays, and scheduling start with sensible defaults.
+3. Setup walks through **all settings, grouped page by page** — Room & devices, Light thresholds, Delay times, Opening schedule, Seasonal sensitivity, Gradual movement, and Position calibration. Every page is prefilled with sensible defaults and shows an explanation (with the default) under each field, so you can simply submit through and fine-tune later.
 
 ### Changing settings later
 

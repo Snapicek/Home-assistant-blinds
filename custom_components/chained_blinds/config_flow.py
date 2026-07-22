@@ -241,12 +241,11 @@ def _title(user_input: dict[str, Any]) -> str:
 
 
 class ChainedBlindsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle initial setup: just the essentials.
+    """Handle initial setup: the full set of settings, grouped page by page.
 
-    Two pages only — room/covers/sensor, then physical calibration. Every
-    tuning value (thresholds, delays, schedule, seasonal, ramp) has a sane
-    default and is adjusted later from the options-flow menu, so first-time
-    setup stays short.
+    Every page comes prefilled with sensible defaults, so users who just want
+    to get going can submit straight through; everything can be revisited
+    later from the options-flow menu.
     """
 
     VERSION = 1
@@ -271,7 +270,7 @@ class ChainedBlindsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors = _validate(user_input)
             if not errors:
                 self._step_data.update(user_input)
-                return await self.async_step_calibration()
+                return await self.async_step_lux_thresholds()
 
         return self.async_show_form(
             step_id="user",
@@ -279,10 +278,75 @@ class ChainedBlindsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_lux_thresholds(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Page 2: Light thresholds."""
+        if user_input is not None:
+            self._step_data.update(user_input)
+            return await self.async_step_dwell()
+
+        return self.async_show_form(
+            step_id="lux_thresholds",
+            data_schema=_build_lux_thresholds_schema(self._step_data),
+        )
+
+    async def async_step_dwell(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Page 3: Delay times."""
+        if user_input is not None:
+            self._step_data.update(user_input)
+            return await self.async_step_sun_schedule()
+
+        return self.async_show_form(
+            step_id="dwell",
+            data_schema=_build_dwell_schema(self._step_data),
+        )
+
+    async def async_step_sun_schedule(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Page 4: Opening schedule."""
+        if user_input is not None:
+            self._step_data.update(user_input)
+            return await self.async_step_seasonal()
+
+        return self.async_show_form(
+            step_id="sun_schedule",
+            data_schema=_build_sun_schedule_schema(self._step_data),
+        )
+
+    async def async_step_seasonal(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Page 5: Seasonal sensitivity."""
+        if user_input is not None:
+            self._step_data.update(user_input)
+            return await self.async_step_ramp()
+
+        return self.async_show_form(
+            step_id="seasonal",
+            data_schema=_build_seasonal_schema(self._step_data),
+        )
+
+    async def async_step_ramp(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Page 6: Gradual movement."""
+        if user_input is not None:
+            self._step_data.update(user_input)
+            return await self.async_step_calibration()
+
+        return self.async_show_form(
+            step_id="ramp",
+            data_schema=_build_ramp_schema(self._step_data),
+        )
+
     async def async_step_calibration(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Page 2: Cover Calibration, then create the entry."""
+        """Page 7: Cover Calibration, then create the entry."""
         if user_input is not None:
             self._step_data.update(user_input)
             unique_id = f"{self._step_data[CONF_LEFT_COVER]}|{self._step_data.get(CONF_RIGHT_COVER, '')}"
