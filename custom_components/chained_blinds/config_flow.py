@@ -2,8 +2,9 @@
 
 Each config entry represents one room: structural wiring (left cover, optional right cover,
 lux sensor) plus all tuning (lux thresholds, dwell, calibration, offsets, seasonal factors).
-Everything except enable/override/state is configured once at setup and can be reconfigured
-via the reconfigure action.
+Initial setup asks only for the essentials (room/covers/sensor + calibration); every tuning
+value starts at a sensible default and is adjusted afterwards from the options-flow menu,
+where each section page saves immediately on submit.
 """
 from __future__ import annotations
 
@@ -240,7 +241,13 @@ def _title(user_input: dict[str, Any]) -> str:
 
 
 class ChainedBlindsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Chained Blinds."""
+    """Handle initial setup: just the essentials.
+
+    Two pages only — room/covers/sensor, then physical calibration. Every
+    tuning value (thresholds, delays, schedule, seasonal, ramp) has a sane
+    default and is adjusted later from the options-flow menu, so first-time
+    setup stays short.
+    """
 
     VERSION = 1
 
@@ -258,13 +265,13 @@ class ChainedBlindsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Step 1: Covers and Lux Sensor."""
+        """Page 1: Room name, covers, and lux sensor."""
         errors: dict[str, str] = {}
         if user_input is not None:
             errors = _validate(user_input)
             if not errors:
                 self._step_data.update(user_input)
-                return await self.async_step_lux_thresholds()
+                return await self.async_step_calibration()
 
         return self.async_show_form(
             step_id="user",
@@ -272,75 +279,10 @@ class ChainedBlindsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_lux_thresholds(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Step 2: Lux Thresholds."""
-        if user_input is not None:
-            self._step_data.update(user_input)
-            return await self.async_step_dwell()
-
-        return self.async_show_form(
-            step_id="lux_thresholds",
-            data_schema=_build_lux_thresholds_schema(self._step_data),
-        )
-
-    async def async_step_dwell(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Step 3: Dwell Times."""
-        if user_input is not None:
-            self._step_data.update(user_input)
-            return await self.async_step_sun_schedule()
-
-        return self.async_show_form(
-            step_id="dwell",
-            data_schema=_build_dwell_schema(self._step_data),
-        )
-
-    async def async_step_sun_schedule(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Step 4: Sun and Scheduling."""
-        if user_input is not None:
-            self._step_data.update(user_input)
-            return await self.async_step_seasonal()
-
-        return self.async_show_form(
-            step_id="sun_schedule",
-            data_schema=_build_sun_schedule_schema(self._step_data),
-        )
-
-    async def async_step_seasonal(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Step 5: Seasonal Light Sensitivity."""
-        if user_input is not None:
-            self._step_data.update(user_input)
-            return await self.async_step_ramp()
-
-        return self.async_show_form(
-            step_id="seasonal",
-            data_schema=_build_seasonal_schema(self._step_data),
-        )
-
-    async def async_step_ramp(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Step 6: Gradual Movement."""
-        if user_input is not None:
-            self._step_data.update(user_input)
-            return await self.async_step_calibration()
-
-        return self.async_show_form(
-            step_id="ramp",
-            data_schema=_build_ramp_schema(self._step_data),
-        )
-
     async def async_step_calibration(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Step 7: Cover Calibration."""
+        """Page 2: Cover Calibration, then create the entry."""
         if user_input is not None:
             self._step_data.update(user_input)
             unique_id = f"{self._step_data[CONF_LEFT_COVER]}|{self._step_data.get(CONF_RIGHT_COVER, '')}"
@@ -348,7 +290,6 @@ class ChainedBlindsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._abort_if_unique_id_configured()
             return self.async_create_entry(title=_title(self._step_data), data=self._step_data)
 
-        # Determine cover roles for calibration step.
         cover_roles = ["left"]
         if self._step_data.get(CONF_RIGHT_COVER):
             cover_roles.append("right")
@@ -360,117 +301,152 @@ class ChainedBlindsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class ChainedBlindsOptionsFlow(config_entries.OptionsFlow):
-    """Allow reconfiguring all tuning fields after setup."""
+    """Menu-based settings: a hub page linking to focused section pages.
+
+    Each section page saves immediately on submit (via async_update_entry,
+    which triggers the entry-reload update listener) and returns to the menu,
+    so users can adjust several sections in one visit and never have to walk
+    a fixed wizard.
+    """
+
+    MENU_OPTIONS = [
+        "covers",
+        "lux_thresholds",
+        "dwell",
+        "sun_schedule",
+        "seasonal",
+        "ramp",
+        "calibration",
+        "finish",
+    ]
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         super().__init__()
         self._config_entry = config_entry
-        self._step_data: dict[str, Any] = {}
 
     @callback
     def _merge_current(self) -> dict[str, Any]:
         """Merge options over data (options take precedence)."""
         return {**self._config_entry.data, **self._config_entry.options}
 
+    @callback
+    def _save(self, user_input: dict[str, Any]) -> None:
+        """Persist one section immediately and retitle the entry."""
+        new_options = {**self._merge_current(), **user_input}
+        self.hass.config_entries.async_update_entry(
+            self._config_entry,
+            options=new_options,
+            title=_title(new_options),
+        )
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Entry point: begin with covers/sensor step."""
-        current = self._merge_current()
-        errors: dict[str, str] = {}
+        """Hub menu: pick a section to adjust."""
+        return self.async_show_menu(step_id="init", menu_options=self.MENU_OPTIONS)
 
+    async def async_step_covers(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Section: Room name, covers, and lux sensor."""
+        errors: dict[str, str] = {}
         if user_input is not None:
             errors = _validate(user_input)
             if not errors:
-                self._step_data.update(user_input)
-                return await self.async_step_reconfigure_lux()
+                self._save(user_input)
+                return await self.async_step_init()
 
-        self._step_data = dict(current)
         return self.async_show_form(
-            step_id="init",
-            data_schema=_build_covers_sensor_schema(current),
+            step_id="covers",
+            data_schema=_build_covers_sensor_schema(user_input or self._merge_current()),
             errors=errors,
         )
 
-    async def async_step_reconfigure_lux(
+    async def async_step_lux_thresholds(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Reconfigure Step 2: Lux Thresholds."""
+        """Section: Light thresholds."""
         if user_input is not None:
-            self._step_data.update(user_input)
-            return await self.async_step_reconfigure_dwell()
+            self._save(user_input)
+            return await self.async_step_init()
 
         return self.async_show_form(
-            step_id="reconfigure_lux",
-            data_schema=_build_lux_thresholds_schema(self._step_data),
+            step_id="lux_thresholds",
+            data_schema=_build_lux_thresholds_schema(self._merge_current()),
         )
 
-    async def async_step_reconfigure_dwell(
+    async def async_step_dwell(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Reconfigure Step 3: Dwell Times."""
+        """Section: Delay times."""
         if user_input is not None:
-            self._step_data.update(user_input)
-            return await self.async_step_reconfigure_sun()
+            self._save(user_input)
+            return await self.async_step_init()
 
         return self.async_show_form(
-            step_id="reconfigure_dwell",
-            data_schema=_build_dwell_schema(self._step_data),
+            step_id="dwell",
+            data_schema=_build_dwell_schema(self._merge_current()),
         )
 
-    async def async_step_reconfigure_sun(
+    async def async_step_sun_schedule(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Reconfigure Step 4: Sun and Scheduling."""
+        """Section: Opening schedule."""
         if user_input is not None:
-            self._step_data.update(user_input)
-            return await self.async_step_reconfigure_seasonal()
+            self._save(user_input)
+            return await self.async_step_init()
 
         return self.async_show_form(
-            step_id="reconfigure_sun",
-            data_schema=_build_sun_schedule_schema(self._step_data),
+            step_id="sun_schedule",
+            data_schema=_build_sun_schedule_schema(self._merge_current()),
         )
 
-    async def async_step_reconfigure_seasonal(
+    async def async_step_seasonal(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Reconfigure Step 5: Seasonal Light Sensitivity."""
+        """Section: Seasonal sensitivity."""
         if user_input is not None:
-            self._step_data.update(user_input)
-            return await self.async_step_reconfigure_ramp()
+            self._save(user_input)
+            return await self.async_step_init()
 
         return self.async_show_form(
-            step_id="reconfigure_seasonal",
-            data_schema=_build_seasonal_schema(self._step_data),
+            step_id="seasonal",
+            data_schema=_build_seasonal_schema(self._merge_current()),
         )
 
-    async def async_step_reconfigure_ramp(
+    async def async_step_ramp(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Reconfigure Step 6: Gradual Movement."""
+        """Section: Gradual movement."""
         if user_input is not None:
-            self._step_data.update(user_input)
-            return await self.async_step_reconfigure_calibration()
+            self._save(user_input)
+            return await self.async_step_init()
 
         return self.async_show_form(
-            step_id="reconfigure_ramp",
-            data_schema=_build_ramp_schema(self._step_data),
+            step_id="ramp",
+            data_schema=_build_ramp_schema(self._merge_current()),
         )
 
-    async def async_step_reconfigure_calibration(
+    async def async_step_calibration(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Reconfigure Step 7: Cover Calibration."""
+        """Section: Position calibration."""
+        current = self._merge_current()
         if user_input is not None:
-            self._step_data.update(user_input)
-            return self.async_create_entry(title=_title(self._step_data), data=self._step_data)
+            self._save(user_input)
+            return await self.async_step_init()
 
-        # Determine cover roles for calibration step.
         cover_roles = ["left"]
-        if self._step_data.get(CONF_RIGHT_COVER):
+        if current.get(CONF_RIGHT_COVER):
             cover_roles.append("right")
 
         return self.async_show_form(
-            step_id="reconfigure_calibration",
-            data_schema=_build_calibration_schema(self._step_data, cover_roles),
+            step_id="calibration",
+            data_schema=_build_calibration_schema(current, cover_roles),
         )
+
+    async def async_step_finish(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Close the menu; every section was already saved on submit."""
+        return self.async_abort(reason="finished")

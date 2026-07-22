@@ -36,10 +36,26 @@ class FakeServices:
         self.calls.append((domain, service, dict(data)))
 
 
+class FakeConfigEntries:
+    """Stands in for hass.config_entries: records async_update_entry calls
+    and applies options/title to the entry like the real manager does."""
+
+    def __init__(self):
+        self.update_calls: list[tuple[object, dict]] = []
+
+    def async_update_entry(self, entry, **kwargs):
+        self.update_calls.append((entry, dict(kwargs)))
+        if "options" in kwargs:
+            entry.options = kwargs["options"]
+        if "title" in kwargs:
+            entry.title = kwargs["title"]
+
+
 class FakeHass:
     def __init__(self):
         self.states = FakeStates()
         self.services = FakeServices()
+        self.config_entries = FakeConfigEntries()
         self.data: dict = {}
 
 
