@@ -86,12 +86,40 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         override = room.entities.get("override")
         if override is not None and override.is_on:
             return
-        # Activate override so the new manual position is held.
+
         _LOGGER.info(
             "%s: manual cover move detected — activating override", room.name
         )
+        # Mark now so the mirrored move below (and its own state_changed
+        # event on the paired cover) isn't mistaken for a second manual move.
+        room.last_move_time = dt_util.utcnow()
+
         if override is not None:
             await override.async_turn_on()
+
+        # Keep both covers aligned: mirror the moved cover's new position
+        # onto its pair so a manual adjustment of one blind is reflected on
+        # both, not just the one that was touched.
+        if room.right_cover:
+            moved_entity_id = event.data.get("entity_id")
+            new_state = event.data.get("new_state")
+            position = (
+                new_state.attributes.get("current_position")
+                if new_state is not None
+                else None
+            )
+            if position is not None:
+                other_cover = (
+                    room.right_cover
+                    if moved_entity_id == room.left_cover
+                    else room.left_cover
+                )
+                await hass.services.async_call(
+                    "cover",
+                    "set_cover_position",
+                    {"entity_id": other_cover, "position": position},
+                    blocking=True,
+                )
 
     entry.async_on_unload(
         async_track_state_change_event(
