@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Set up your room",
-        "description": "Setup takes just **two quick pages** — pick your devices here, then calibrate the blind positions. Everything else (light thresholds, delays, schedule…) starts with sensible defaults you can fine-tune anytime via **Settings → Devices & services → Chained Blinds → Configure**.",
+        "description": "Setup walks through **all settings, grouped page by page** — devices, light thresholds, delays, schedule, seasonal, movement, calibration. Every page is prefilled with sensible defaults, so you can simply submit through and fine-tune later via **Configure**.",
         "data": {
           "room_name": "Room name",
           "left_cover": "Left (primary) cover",
@@ -15,6 +15,82 @@
           "left_cover": "The blind this automation controls. Required.",
           "right_cover": "Optional second blind — it follows the left one with a 1-second stagger so both motors never start at once.",
           "lux_sensor": "An illuminance sensor (lux) that drives the automation. An outdoor or window-facing sensor works best."
+        }
+      },
+      "lux_thresholds": {
+        "title": "Light thresholds",
+        "description": "When brightness rises past a *close* threshold the blinds move darker; they only move back once it drops below the matching *reopen* threshold. The defaults suit an outdoor sensor — keep them if unsure; every page can be revisited later via **Configure**.",
+        "data": {
+          "lux_medium": "Close to medium shade",
+          "lux_medium_reopen": "Reopen from medium shade",
+          "lux_high": "Close to full shade",
+          "lux_high_reopen": "Reopen from full shade"
+        },
+        "data_description": {
+          "lux_medium": "Brightness at which the blinds start moving to medium shade. For an outdoor sensor this is where bright/hazy sun begins. Default: 12 000 lx.",
+          "lux_medium_reopen": "Brightness must fall below this before the blinds reopen from medium shade. Default: 7 000 lx.",
+          "lux_high": "Brightness at which the blinds move to full shade — strong direct sun. Default: 35 000 lx.",
+          "lux_high_reopen": "Brightness must fall below this before the blinds move back from full shade. Default: 21 000 lx."
+        }
+      },
+      "dwell": {
+        "title": "Delay times",
+        "description": "Delays protect the chain-drive mechanism from rapid back-and-forth cycling. Darkening reacts faster; reopening waits longer to be sure the bright spell is really over.",
+        "data": {
+          "dwell_minutes": "Darkening delay",
+          "reopen_dwell_minutes": "Reopening delay",
+          "override_duration_minutes": "Pause duration"
+        },
+        "data_description": {
+          "dwell_minutes": "Minimum minutes between two darkening moves. Default: 10 min.",
+          "reopen_dwell_minutes": "Minimum minutes before the blinds may lighten again. Default: 30 min.",
+          "override_duration_minutes": "How long the \"Pause automation\" switch (or a detected manual move) holds the current position before automation resumes. Default: 60 min."
+        }
+      },
+      "sun_schedule": {
+        "title": "Opening schedule",
+        "description": "Before the morning opening time (and after sunset) the blinds stay closed regardless of light. With a workday sensor, workdays and free days get separate opening times; you can also open at sunrise instead of a fixed time.",
+        "data": {
+          "open_time": "Workday opening time",
+          "non_workday_open_time": "Weekend / holiday opening time",
+          "use_sunrise_open": "Open at sunrise",
+          "sunrise_offset_minutes": "Sunrise offset",
+          "sunset_offset_minutes": "Sunset offset"
+        },
+        "data_description": {
+          "open_time": "Earliest time the blinds may open on workdays. Default: 07:00.",
+          "non_workday_open_time": "Earliest opening time when the workday sensor reports a day off. Default: 09:30.",
+          "use_sunrise_open": "When on, the morning boundary is sunrise (plus the offset below) instead of the fixed times. Default: off.",
+          "sunrise_offset_minutes": "Shifts the sunrise boundary. Negative = earlier, positive = later. Default: 0 min.",
+          "sunset_offset_minutes": "Shifts the evening close boundary relative to sunset. Negative = earlier, positive = later. Default: 0 min."
+        }
+      },
+      "seasonal": {
+        "title": "Seasonal sensitivity",
+        "description": "The same lux reading means something different in July than in December. Seasonal factors scale the light thresholds for summer (Apr–Sep) and winter (Oct–Mar) — 100 % means no adjustment.",
+        "data": {
+          "seasonal_split": "Enable seasonal adjustment",
+          "summer_lux_factor": "Summer factor",
+          "winter_lux_factor": "Winter factor"
+        },
+        "data_description": {
+          "seasonal_split": "Applies the summer/winter factors below to all light thresholds. Default: off.",
+          "summer_lux_factor": "Threshold multiplier for April–September. Above 100 % = less eager to close in summer. Default: 115 %.",
+          "winter_lux_factor": "Threshold multiplier for October–March. Below 100 % = closes sooner in low winter sun. Default: 85 %."
+        }
+      },
+      "ramp": {
+        "title": "Gradual movement",
+        "description": "Instead of jumping straight to the target position, the blinds can creep toward it in small steps — quieter and visually smoother.",
+        "data": {
+          "ramp_enabled": "Enable gradual movement",
+          "ramp_step_percent": "Step size",
+          "ramp_interval_minutes": "Step interval"
+        },
+        "data_description": {
+          "ramp_enabled": "Move in steps instead of one direct jump. Default: off.",
+          "ramp_step_percent": "Position change per step. Default: 20 %.",
+          "ramp_interval_minutes": "Minimum minutes between steps. Default: 5 min."
         }
       },
       "calibration": {
