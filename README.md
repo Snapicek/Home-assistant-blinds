@@ -22,7 +22,7 @@ The integration automatically moves your covers through four semantic states bas
 - **Dwell lock** — prevents rapid down→up→down cycling that can damage chain-drive mechanisms.
 - **Night window** — configurable time range during which the integration holds the blind closed regardless of lux.
 - **Workday-aware mornings** — uses `binary_sensor.workday_sensor` to choose between normal and non-workday morning opening times.
-- **Manual override** — dedicated switch holds the current position for a configurable number of minutes, then auto-clears; no external `timer` helper needed.
+- **Manual override** — dedicated switch holds the current position for a configurable number of minutes, then auto-clears; no external `timer` helper needed. Manually moving either cover (e.g. a physical remote/wall switch) is detected automatically: the other cover is mirrored to match, and the override switch activates to pause automation for the same duration.
 - **Optional gradual ramping** — when enabled, blinds move toward the target in configurable step sizes at configurable intervals.
 - **Fully UI-configured** — Config Flow setup, with every threshold and calibration value re-adjustable later via **Configure** (no YAML editing).
 - **Two-cover rooms** — left and right covers move together with a 1 s stagger so they don't strain the same circuit simultaneously.
@@ -89,7 +89,7 @@ Everything the integration creates lives under one device per room:
 
 | Entity | Purpose |
 |---|---|
-| `select.<room>_blind_position_mode` | Current/manual semantic state — pick `Open`, `Medium shade`, `Full shade`, or `Closed` to move the blinds there directly. Selecting a state does **not** pause the automatic resolver; use "Pause automation" for that. |
+| `select.<room>_blind_position_mode` | Current/manual semantic state — pick `Open`, `Medium shade`, `Full shade`, or `Closed` to move the blinds there directly. Selecting a state also pauses the automatic resolver (same as "Pause automation"), so it holds until you clear the pause or it auto-expires. |
 | `switch.<room>_automation_enabled` | Turn the automatic lux/schedule-based control on or off |
 | `switch.<room>_pause_automation` | Temporarily hold the current position while keeping automation enabled; auto-clears after the configured pause duration |
 

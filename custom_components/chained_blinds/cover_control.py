@@ -49,6 +49,14 @@ async def _async_apply_positions(
     right_position: float | None,
     final_state: SemanticState | None,
 ) -> None:
+    # Record the move start time before issuing any command so the
+    # manual-move detector's grace window (in __init__.py) covers the whole
+    # staggered sequence below -- not just the moment after it finishes.
+    # Otherwise a state_changed event fired by the left cover the instant
+    # it starts moving can race ahead of this timestamp and be mistaken for
+    # a manual move mid-automatic-move.
+    room.last_move_time = dt_util.utcnow()
+
     await hass.services.async_call(
         "cover",
         "set_cover_position",
@@ -65,10 +73,9 @@ async def _async_apply_positions(
             blocking=True,
         )
 
-    # Keep dwell/manual-detection timing on every real move.
+    # Keep dwell bookkeeping on every real move.
     if final_state is not None:
         room.current_state = final_state
-    room.last_move_time = dt_util.utcnow()
     await room.async_persist()
 
     state_select = room.entities.get("state_select")

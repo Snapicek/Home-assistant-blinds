@@ -25,8 +25,9 @@ class ChainedBlindsStateSelect(SelectEntity, RestoreEntity):
 
     Manually selecting an option here routes through the exact same move
     path the coordinator uses, so it never bypasses per-cover calibration
-    or the dwell-time bookkeeping. Note this does not disable the automatic
-    resolver -- the enable switch or the override switch do that.
+    or the dwell-time bookkeeping. It also activates the override switch,
+    pausing the automatic resolver so it doesn't immediately move the
+    covers away from the state the user just picked.
     """
 
     _attr_has_entity_name = True
@@ -58,7 +59,14 @@ class ChainedBlindsStateSelect(SelectEntity, RestoreEntity):
         from .cover_control import async_move_to_state
 
         await async_move_to_state(self.hass, self._room.config_entry, self._room, SemanticState(option))
-        if self._room.coordinator is not None:
+
+        # A manually forced state is a manual move too: pause automation so
+        # the resolver doesn't immediately re-evaluate and move away from
+        # the state the user just picked.
+        override = self._room.entities.get("override")
+        if override is not None:
+            await override.async_turn_on()
+        elif self._room.coordinator is not None:
             await self._room.coordinator.async_request_refresh()
 
     @callback
