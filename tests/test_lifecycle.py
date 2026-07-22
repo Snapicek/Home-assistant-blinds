@@ -123,7 +123,13 @@ async def test_async_setup_entry_manual_move_activates_override(monkeypatch):
 
     # Fire the cover-change listener manually and ensure override is activated.
     cover_listener = next(cb for ents, cb in listeners if room.left_cover in ents)
-    await cover_listener(event={})
+    event = SimpleNamespace(
+        data={
+            "entity_id": room.left_cover,
+            "new_state": SimpleNamespace(attributes={"current_position": 50}),
+        }
+    )
+    await cover_listener(event)
 
     assert override.turn_on_calls == 1
 
@@ -167,7 +173,7 @@ async def test_async_setup_entry_wires_listeners_and_refreshes_on_lux(monkeypatc
     assert room.coordinator.refresh_calls == 1
 
 
-async def test_manual_move_ignores_grace_window_then_enables_override(monkeypatch):
+async def test_manual_move_skipped_when_override_already_on(monkeypatch):
     hass = FakeHass()
     hass.config_entries = _FakeConfigEntries()
     entry = _FakeEntry()
@@ -178,12 +184,9 @@ async def test_manual_move_ignores_grace_window_then_enables_override(monkeypatc
         listeners.append((list(entities), callback))
         return lambda: None
 
-    now_ref = {"now": datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)}
-
     monkeypatch.setattr(integration, "Store", _TypedFakeStore)
     monkeypatch.setattr(integration, "ChainedBlindsCoordinator", _FakeCoordinator)
     monkeypatch.setattr(integration, "async_track_state_change_event", _fake_track_state_change_event)
-    monkeypatch.setattr(integration.dt_util, "utcnow", lambda: now_ref["now"])
 
     ok = await integration.async_setup_entry(hass, entry)
     assert ok is True
@@ -193,18 +196,20 @@ async def test_manual_move_ignores_grace_window_then_enables_override(monkeypatc
     room.entities["override"] = override
     cover_listener = next(cb for ents, cb in listeners if room.left_cover in ents)
 
-    room.last_move_time = now_ref["now"]
-    now_ref["now"] = now_ref["now"] + timedelta(seconds=10)
-    await cover_listener(event={})
+    # When override is already on, manual move should be skipped
+    override.is_on = True
+    event = SimpleNamespace(
+        data={
+            "entity_id": room.left_cover,
+            "new_state": SimpleNamespace(attributes={"current_position": 50}),
+        }
+    )
+    await cover_listener(event)
     assert override.turn_on_calls == 0
 
-    now_ref["now"] = room.last_move_time + timedelta(seconds=31)
-    await cover_listener(event={})
-    assert override.turn_on_calls == 1
-
-    override.is_on = True
-    now_ref["now"] = room.last_move_time + timedelta(seconds=120)
-    await cover_listener(event={})
+    # When override is off, manual move should activate it
+    override.is_on = False
+    await cover_listener(event)
     assert override.turn_on_calls == 1
 
 
