@@ -2,8 +2,8 @@
   "config": {
     "step": {
       "user": {
-        "title": "Set up your room",
-        "description": "Setup walks through **all settings, grouped page by page** — devices, light thresholds, delays, schedule, seasonal, movement, calibration. Every page is prefilled with sensible defaults, so you can simply submit through and fine-tune later via **Configure**.",
+        "title": "Step 1 of 7 · Room & devices",
+        "description": "Setup walks through **7 short pages** — devices, light thresholds, delays, schedule, seasonal, movement, calibration. Every page is prefilled with sensible defaults, so you can simply submit through and fine-tune later via **Configure**.",
         "data": {
           "room_name": "Room name",
           "left_cover": "Left (primary) cover",
@@ -18,7 +18,7 @@
         }
       },
       "lux_thresholds": {
-        "title": "Light thresholds",
+        "title": "Step 2 of 7 · Light thresholds",
         "description": "When brightness rises past a *close* threshold the blinds move darker; they only move back once it drops below the matching *reopen* threshold. The defaults suit an outdoor sensor — keep them if unsure; every page can be revisited later via **Configure**.",
         "data": {
           "lux_medium": "Close to medium shade",
@@ -34,7 +34,7 @@
         }
       },
       "dwell": {
-        "title": "Delay times",
+        "title": "Step 3 of 7 · Delay times",
         "description": "Delays protect the chain-drive mechanism from rapid back-and-forth cycling. Darkening reacts faster; reopening waits longer to be sure the bright spell is really over.",
         "data": {
           "dwell_minutes": "Darkening delay",
@@ -48,7 +48,7 @@
         }
       },
       "sun_schedule": {
-        "title": "Opening schedule",
+        "title": "Step 4 of 7 · Opening schedule",
         "description": "Before the morning opening time (and after sunset) the blinds stay closed regardless of light. With a workday sensor, workdays and free days get separate opening times; you can also open at sunrise instead of a fixed time.",
         "data": {
           "open_time": "Workday opening time",
@@ -66,7 +66,7 @@
         }
       },
       "seasonal": {
-        "title": "Seasonal sensitivity",
+        "title": "Step 5 of 7 · Seasonal sensitivity",
         "description": "The same lux reading means something different in July than in December. Seasonal factors scale the light thresholds for summer (Apr–Sep) and winter (Oct–Mar) — 100 % means no adjustment.",
         "data": {
           "seasonal_split": "Enable seasonal adjustment",
@@ -80,7 +80,7 @@
         }
       },
       "ramp": {
-        "title": "Gradual movement",
+        "title": "Step 6 of 7 · Gradual movement",
         "description": "Instead of jumping straight to the target position, the blinds can creep toward it in small steps — quieter and visually smoother.",
         "data": {
           "ramp_enabled": "Enable gradual movement",
@@ -94,7 +94,7 @@
         }
       },
       "calibration": {
-        "title": "Calibrate blind positions",
+        "title": "Step 7 of 7 · Calibrate blind positions",
         "description": "Chain-driven blinds are special: **both 0 % and 100 % can be fully dark**, and the brightest position differs per blind. Move each blind physically, note the raw position (0–100 %) for each of the four states, and enter them here. You can recalibrate anytime from the Configure menu.",
         "data": {
           "left_open_pos": "Left · Open",
@@ -129,7 +129,7 @@
     "step": {
       "init": {
         "title": "Blind settings",
-        "description": "Pick a section to adjust. **Each page saves as soon as you submit it** and brings you back here — change as much or as little as you like, then choose *Finish*.",
+        "description": "Pick a section to adjust. **Each page saves the moment you submit it** and brings you back here — change as much or as little as you like. *Finish* simply closes this menu; there is nothing extra to confirm.",
         "menu_options": {
           "covers": "🏠 Room & devices",
           "lux_thresholds": "☀️ Light thresholds",
@@ -138,7 +138,7 @@
           "seasonal": "🍂 Seasonal sensitivity",
           "ramp": "🐢 Gradual movement",
           "calibration": "🎯 Position calibration",
-          "finish": "✓ Finish"
+          "finish": "✓ Finish — everything's already saved"
         }
       },
       "covers": {
@@ -262,7 +262,7 @@
       "required": "This field is required."
     },
     "abort": {
-      "finished": "All changes saved. ✓"
+      "finished": "Done! Your changes were saved as you submitted each page."
     }
   },
   "entity": {
