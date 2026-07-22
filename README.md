@@ -11,7 +11,7 @@
 
 A Home Assistant custom integration for **chain-driven motorized blinds** where both 0 % and 100 % are fully dark and the position of maximum light differs per physical cover and must be calibrated individually.
 
-The integration automatically moves your covers through four semantic states based on a lux sensor and configurable thresholds — all tunable live from the dashboard without restarting Home Assistant.
+The integration automatically moves your covers through four semantic states based on a lux sensor and configurable thresholds — every threshold can be retuned at any time via the integration's **Configure** dialog, with no restart needed.
 
 ---
 
@@ -24,7 +24,7 @@ The integration automatically moves your covers through four semantic states bas
 - **Workday-aware mornings** — uses `binary_sensor.workday_sensor` to choose between normal and non-workday morning opening times.
 - **Manual override** — dedicated switch holds the current position for a configurable number of minutes, then auto-clears; no external `timer` helper needed.
 - **Optional gradual ramping** — when enabled, blinds move toward the target in configurable step sizes at configurable intervals.
-- **Fully UI-configured** — Config Flow setup, all thresholds and calibration values adjustable via dashboard entities (no YAML editing).
+- **Fully UI-configured** — Config Flow setup, with every threshold and calibration value re-adjustable later via **Configure** (no YAML editing).
 - **Two-cover rooms** — left and right covers move together with a 1 s stagger so they don't strain the same circuit simultaneously.
 
 ---
@@ -65,68 +65,29 @@ The integration automatically moves your covers through four semantic states bas
 
 1. Go to **Settings → Devices & Services → Add Integration**.
 2. Search for **Chained Blinds Controller** and select it.
-3. Fill in the config form:
-    - **Room name** — used as the prefix for all created entities.
+3. Walk through the setup wizard:
+    - **Room name** *(optional)* — used for the device and every entity created for it, e.g. "Bedroom". Leave blank to fall back to a name derived from the cover entity IDs.
     - **Left cover** *(required)* — a `cover` entity.
     - **Right cover** *(optional)* — second `cover` entity; moves 1 s after the left one.
     - **Lux sensor** — a `sensor` entity reporting illuminance in lux.
-4. Click **Submit**. A new device appears under **Devices & Services**.
+    - Lux thresholds, delay times, sun/scheduling, seasonal sensitivity, gradual movement, and per-cover calibration.
+4. Click **Submit** on the final step. A new device appears under **Devices & Services**.
 
-You can change any of these settings at any time via the integration's **Configure** button.
+Every one of the settings above — including the room name — can be changed later via the integration's **Configure** button, which walks through the same steps pre-filled with your current values. Reconfiguring applies immediately; no restart or reload is needed.
 
-### Calibration
+### Entities
 
-Each semantic state maps to a raw cover position (0–100 %). After setup, open the room's device page and adjust the `number` entities:
-
-| Entity | What to set |
-|---|---|
-| `number.<room>_left_open_pos` | Raw % giving maximum light for the left cover |
-| `number.<room>_left_medium_pos` | Partial-shade position |
-| `number.<room>_left_shade_pos` | Sun-blocking position |
-| `number.<room>_right_*_pos` | Same for the right cover |
-
-All changes take effect on the next evaluation cycle — no restart or reload needed.
-
-### Device entities
-
-Action entities are intended for daily control and should stay visible on the
-main device view.
+Everything the integration creates lives under one device per room:
 
 | Entity | Purpose |
 |---|---|
-| `switch.<room>_enabled` | Turn automatic blind control on or off |
-| `switch.<room>_override` | Temporarily pause automation while keeping the current blind position |
-| `select.<room>_state` | Manually move blinds to `open`, `medium`, `shade`, or `closed` |
-| `time.<room>_open_time` | Set morning opening time used when `binary_sensor.workday_sensor` is `on` |
-| `time.<room>_non_workday_open_time` | Set later morning opening time used when `binary_sensor.workday_sensor` is `off` |
+| `select.<room>_blind_position_mode` | Current/manual semantic state — pick `Open`, `Medium shade`, `Full shade`, or `Closed` to move the blinds there directly. Selecting a state does **not** pause the automatic resolver; use "Pause automation" for that. |
+| `switch.<room>_automation_enabled` | Turn the automatic lux/schedule-based control on or off |
+| `switch.<room>_pause_automation` | Temporarily hold the current position while keeping automation enabled; auto-clears after the configured pause duration |
 
-Settings entities are maintenance/configuration controls and are best kept in
-the device Settings section.
+All lux thresholds, delays, scheduling, seasonal factors, ramp settings, and per-cover calibration are tuned via **Configure**, not via separate entities.
 
-| Entity | Purpose |
-|---|---|
-| `number.<room>_lux_medium` | Brightness level that starts moving toward medium shade |
-| `number.<room>_lux_medium_reopen` | Lower brightness needed before moving back toward medium |
-| `number.<room>_lux_high` | Brightness level that starts moving toward full shade |
-| `number.<room>_lux_high_reopen` | Lower brightness needed before moving back from full shade |
-| `number.<room>_dwell_minutes` | Minimum delay before another darkening move |
-| `number.<room>_reopen_dwell_minutes` | Minimum delay before another opening move |
-| `number.<room>_override_duration_minutes` | How long pause automation stays active before auto-clear |
-| `number.<room>_ramp_step_percent` | Position delta used for each gradual movement step |
-| `number.<room>_ramp_interval_minutes` | Minimum minutes between gradual movement steps |
-| `number.<room>_sunrise_offset_minutes` | Shift computed sunrise earlier/later |
-| `number.<room>_sunset_offset_minutes` | Shift computed sunset earlier/later |
-| `number.<room>_summer_lux_factor` | Seasonal multiplier for summer brightness response |
-| `number.<room>_winter_lux_factor` | Seasonal multiplier for winter brightness response |
-| `number.<room>_<left/right>_<state>_pos` | Per-cover calibration percentage for each semantic state |
-| `switch.<room>_ramp_enabled` | Enable step-by-step gradual motion instead of direct jumps |
-| `switch.<room>_seasonal_split` | Enable separate summer/winter sensitivity multipliers |
-| `switch.<room>_sunrise_open` | Use sunrise (plus offset) as morning opening boundary |
-
-Number entities display as whole numbers to reduce visual noise (for example
-`12000 lx` instead of `12000.0 lx`).
-
-If `binary_sensor.workday_sensor` does not exist, the integration falls back to the normal `time.<room>_open_time` behavior every day.
+If `binary_sensor.workday_sensor` does not exist, the integration falls back to the normal workday opening time every day.
 
 ---
 
@@ -137,11 +98,11 @@ If `binary_sensor.workday_sensor` does not exist, the integration falls back to 
 
 Covers are moved only via `cover.set_cover_position` with an explicit calibrated percentage — never `open_cover`/`close_cover`. This guarantees physical accuracy regardless of the cover's internal state tracking.
 
-The coordinator re-evaluates on every 5-minute poll **and** whenever the lux sensor or `binary_sensor.workday_sensor` changes. Effective morning open time is selected first: `time.<room>_open_time` on workdays, `time.<room>_non_workday_open_time` on non-workdays.
+The coordinator re-evaluates on every 5-minute poll **and** whenever the lux sensor or `binary_sensor.workday_sensor` changes. Effective morning open time is selected first: the configured "Workday opening time" on workdays, "Non-workday opening time" on non-workdays.
 
 Resolver/move priority then works like this:
 
-1. **Manual override** — if `switch.<room>_override` is on, current state is held.
+1. **Manual override** — if `switch.<room>_pause_automation` is on, current state is held.
 2. **Night window** — before effective morning open time, or after sunset boundary, target state is `closed`.
 3. **Lux thresholds** — compares lux against primary thresholds to darken immediately.
 4. **Reopen hysteresis** — lightening only happens after the lower `*_reopen` thresholds are crossed.
