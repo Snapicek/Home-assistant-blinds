@@ -43,6 +43,15 @@ class RoomRuntimeData:
     # keep at least STAGGER_SECONDS between any two outgoing commands.
     _last_cover_command_time: datetime | None = None
 
+    # Per-cover entity_id -> last position this integration itself commanded
+    # via cover.set_cover_position. Chain-driven blinds rarely land exactly
+    # on the commanded percentage (a "50" can settle at 52 and keep
+    # wobbling between adjacent values for minutes) -- the manual-move
+    # detector in __init__.py treats a reported position that's still close
+    # to what we last asked for as our own settling, not a manual move,
+    # no matter how long the wobble continues.
+    _last_commanded_position: dict[str, float] = field(default_factory=dict)
+
     # Populated by the switch/select platforms during async_setup_entry so the
     # coordinator can read the operational entities (enabled, override,
     # state_select) directly. All tuning now lives on config_entry, not here.

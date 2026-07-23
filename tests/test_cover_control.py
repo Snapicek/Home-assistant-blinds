@@ -141,6 +141,18 @@ async def test_call_cover_service_waits_stagger_seconds_between_commands(monkeyp
     assert called_entity_ids == ["cover.a", "cover.b"]
 
 
+async def test_call_cover_service_records_commanded_position(monkeypatch):
+    """The manual-move detector in __init__.py relies on
+    room._last_commanded_position to recognize a cover settling near its
+    own commanded target, so every call must record it here."""
+    hass = FakeHass()
+    room = make_room()
+
+    await cover_control.async_call_cover_service(hass, room, "cover.a", 42)
+
+    assert room._last_commanded_position["cover.a"] == 42
+
+
 async def test_call_cover_service_skips_wait_once_interval_has_elapsed(monkeypatch):
     hass = FakeHass()
     room = make_room()
