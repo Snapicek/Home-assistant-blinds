@@ -39,6 +39,7 @@ async def async_call_cover_service(
             await asyncio.sleep(wait)
 
     room._last_cover_command_time = dt_util.utcnow()
+    room._last_commanded_position[entity_id] = position
     await hass.services.async_call(
         "cover",
         "set_cover_position",

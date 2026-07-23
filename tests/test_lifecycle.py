@@ -435,6 +435,126 @@ async def test_move_after_grace_period_still_activates_override(monkeypatch):
     assert override.turn_on_calls == 1
 
 
+async def test_settling_near_commanded_position_ignored_past_grace_window(monkeypatch):
+    """Chain-driven blinds rarely land exactly on the commanded percentage
+    and can keep wobbling between adjacent values for minutes. A position
+    close to what we last commanded must not activate override no matter
+    how long the wobble continues -- unlike the flag/grace-window checks,
+    this one isn't time-limited (until _SETTLING_MAX_SECONDS)."""
+    hass = FakeHass()
+    hass.config_entries = _FakeConfigEntries()
+    entry = _FakeEntry()
+
+    listeners: list[tuple[list[str], object]] = []
+
+    def _fake_track_state_change_event(_hass, entities, callback):
+        listeners.append((list(entities), callback))
+        return lambda: None
+
+    monkeypatch.setattr(integration, "Store", _TypedFakeStore)
+    monkeypatch.setattr(integration, "ChainedBlindsCoordinator", _FakeCoordinator)
+    monkeypatch.setattr(integration, "async_track_state_change_event", _fake_track_state_change_event)
+
+    ok = await integration.async_setup_entry(hass, entry)
+    assert ok is True
+
+    room = hass.data[DOMAIN][entry.entry_id]
+    override = _FakeOverride()
+    room.entities["override"] = override
+    cover_listener = next(cb for ents, cb in listeners if room.left_cover in ents)
+
+    now = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(integration.dt_util, "utcnow", lambda: now)
+
+    # We commanded 50 several minutes ago -- well past the 30s grace
+    # window -- and the flag has long since cleared.
+    room.last_move_time = now - timedelta(minutes=3)
+    room._automation_move_in_progress = False
+    room._last_commanded_position[room.left_cover] = 50
+
+    # The blind is still wobbling near 50 (e.g. 52, then 48).
+    await cover_listener(_cover_event(room.left_cover, 52))
+    assert override.turn_on_calls == 0
+    await cover_listener(_cover_event(room.left_cover, 48))
+    assert override.turn_on_calls == 0
+
+
+async def test_settling_tolerance_does_not_mask_a_real_manual_move(monkeypatch):
+    """A position far outside the commanded tolerance is a real manual
+    move and must still activate override, even with a recent commanded
+    position on record for that cover."""
+    hass = FakeHass()
+    hass.config_entries = _FakeConfigEntries()
+    entry = _FakeEntry()
+
+    listeners: list[tuple[list[str], object]] = []
+
+    def _fake_track_state_change_event(_hass, entities, callback):
+        listeners.append((list(entities), callback))
+        return lambda: None
+
+    monkeypatch.setattr(integration, "Store", _TypedFakeStore)
+    monkeypatch.setattr(integration, "ChainedBlindsCoordinator", _FakeCoordinator)
+    monkeypatch.setattr(integration, "async_track_state_change_event", _fake_track_state_change_event)
+
+    ok = await integration.async_setup_entry(hass, entry)
+    assert ok is True
+
+    room = hass.data[DOMAIN][entry.entry_id]
+    override = _FakeOverride()
+    room.entities["override"] = override
+    cover_listener = next(cb for ents, cb in listeners if room.left_cover in ents)
+
+    now = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(integration.dt_util, "utcnow", lambda: now)
+
+    room.last_move_time = now - timedelta(minutes=3)
+    room._automation_move_in_progress = False
+    room._last_commanded_position[room.left_cover] = 50
+
+    # Someone pulled it most of the way open -- nowhere near the 5%
+    # tolerance around the commanded 50.
+    await cover_listener(_cover_event(room.left_cover, 90))
+    assert override.turn_on_calls == 1
+
+
+async def test_settling_tolerance_expires_for_a_stale_commanded_position(monkeypatch):
+    """A commanded position from long ago (beyond _SETTLING_MAX_SECONDS)
+    must not permanently immunize that percentage against manual-move
+    detection."""
+    hass = FakeHass()
+    hass.config_entries = _FakeConfigEntries()
+    entry = _FakeEntry()
+
+    listeners: list[tuple[list[str], object]] = []
+
+    def _fake_track_state_change_event(_hass, entities, callback):
+        listeners.append((list(entities), callback))
+        return lambda: None
+
+    monkeypatch.setattr(integration, "Store", _TypedFakeStore)
+    monkeypatch.setattr(integration, "ChainedBlindsCoordinator", _FakeCoordinator)
+    monkeypatch.setattr(integration, "async_track_state_change_event", _fake_track_state_change_event)
+
+    ok = await integration.async_setup_entry(hass, entry)
+    assert ok is True
+
+    room = hass.data[DOMAIN][entry.entry_id]
+    override = _FakeOverride()
+    room.entities["override"] = override
+    cover_listener = next(cb for ents, cb in listeners if room.left_cover in ents)
+
+    now = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(integration.dt_util, "utcnow", lambda: now)
+
+    room.last_move_time = now - timedelta(seconds=601)
+    room._automation_move_in_progress = False
+    room._last_commanded_position[room.left_cover] = 50
+
+    await cover_listener(_cover_event(room.left_cover, 52))
+    assert override.turn_on_calls == 1
+
+
 async def test_async_unload_entry_drops_room_data_when_platforms_unload(monkeypatch):
     hass = FakeHass()
     hass.config_entries = _FakeConfigEntries()
