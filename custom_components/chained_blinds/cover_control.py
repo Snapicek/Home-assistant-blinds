@@ -13,12 +13,38 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from .const import DEFAULT_CALIBRATION, SemanticState
-from .helpers import is_at_target, step_towards
+from .helpers import elapsed_seconds, is_at_target, step_towards
 from .models import RoomRuntimeData
 
 _LOGGER = logging.getLogger(__name__)
 
+# Minimum gap enforced between any two cover.set_cover_position calls this
+# integration issues for a room -- covers are Zigbee devices on a shared
+# mesh, so back-to-back commands to different devices risk being dropped or
+# delayed. Every call site (the staggered left/right move below, ramp
+# steps, and the manual-move mirror in __init__.py) goes through
+# async_call_cover_service so the spacing holds globally, not just between
+# the two calls inside a single move.
 STAGGER_SECONDS = 1
+
+
+async def async_call_cover_service(
+    hass: HomeAssistant, room: RoomRuntimeData, entity_id: str, position: float
+) -> None:
+    """Call cover.set_cover_position, waiting out STAGGER_SECONDS since the
+    last command this integration sent to any of the room's covers."""
+    if room._last_cover_command_time is not None:
+        wait = STAGGER_SECONDS - elapsed_seconds(room._last_cover_command_time, dt_util.utcnow())
+        if wait > 0:
+            await asyncio.sleep(wait)
+
+    room._last_cover_command_time = dt_util.utcnow()
+    await hass.services.async_call(
+        "cover",
+        "set_cover_position",
+        {"entity_id": entity_id, "position": position},
+        blocking=True,
+    )
 
 
 def _calibrated_position(config_entry: ConfigEntry, role: str, state: SemanticState) -> float:
@@ -61,21 +87,10 @@ async def _async_apply_positions(
     # can distinguish this from actual manual moves via state-changed events.
     room._automation_move_in_progress = True
     try:
-        await hass.services.async_call(
-            "cover",
-            "set_cover_position",
-            {"entity_id": room.left_cover, "position": left_position},
-            blocking=True,
-        )
+        await async_call_cover_service(hass, room, room.left_cover, left_position)
 
         if room.right_cover and right_position is not None:
-            await asyncio.sleep(STAGGER_SECONDS)
-            await hass.services.async_call(
-                "cover",
-                "set_cover_position",
-                {"entity_id": room.right_cover, "position": right_position},
-                blocking=True,
-            )
+            await async_call_cover_service(hass, room, room.right_cover, right_position)
     finally:
         # Brief delay to let state-changed events be processed while flag is still True.
         await asyncio.sleep(0.5)

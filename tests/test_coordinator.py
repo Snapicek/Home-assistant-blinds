@@ -23,6 +23,11 @@ def _make_coordinator(monkeypatch, hass, room, now=NOON):
     monkeypatch.setattr(coordinator_module.dt_util, "now", lambda: now)
     monkeypatch.setattr(coordinator_module.dt_util, "utcnow", lambda: now)
     monkeypatch.setattr(cover_control_module.dt_util, "utcnow", lambda: now)
+    # dt_util.utcnow() is frozen above, so the Zigbee command-spacing gate in
+    # async_call_cover_service would otherwise see zero elapsed time between
+    # calls and fall back to a real asyncio.sleep(STAGGER_SECONDS) -- fine
+    # for production, just needless wall-clock delay in these unit tests.
+    monkeypatch.setattr(cover_control_module, "STAGGER_SECONDS", 0)
     # Use room.config_entry (populated by make_room with test tuning data),
     # not a fresh empty FakeConfigEntry -- otherwise config-driven values
     # (thresholds, dwell, seasonal factors, etc.) silently fall back to

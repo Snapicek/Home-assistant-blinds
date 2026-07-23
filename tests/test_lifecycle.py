@@ -255,6 +255,9 @@ async def test_manual_move_mirrors_position_to_paired_cover(monkeypatch):
     assert hass.services.calls == [
         ("cover", "set_cover_position", {"entity_id": room.right_cover, "position": 42}),
     ]
+    # The mirror call must go through the same Zigbee-spacing gate as every
+    # other cover command, not bypass it via a raw service call.
+    assert room._last_cover_command_time is not None
 
 
 async def test_manual_move_of_right_cover_mirrors_onto_left(monkeypatch):
