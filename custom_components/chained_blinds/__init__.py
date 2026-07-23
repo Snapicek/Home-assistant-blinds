@@ -78,11 +78,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         cover_entities.append(room.right_cover)
 
     async def _async_handle_cover_state_change(event) -> None:
-        # Check if this state change is from our own automation move by checking the flag.
-        # During automation-initiated moves, the flag is set True. These moves should
-        # trigger mirroring but NOT pause activation. Real manual moves have the flag
-        # False and trigger both mirroring and pause.
-        if room._automation_move_in_progress:
+        # Check if this state change is from our own automation move. The
+        # in-progress flag covers the moment the move is issued, but slow
+        # covers keep emitting state-changed events (intermediate positions,
+        # final settle) well after the flag has already cleared -- those
+        # still need to be attributed to the automation, not the user, or
+        # every automatic move ends up pausing itself. So we also honor the
+        # grace window below, keyed off when the move actually started.
+        within_grace_period = (
+            room.last_move_time is not None
+            and elapsed_seconds(room.last_move_time, dt_util.utcnow())
+            < _MANUAL_MOVE_GRACE_SECONDS
+        )
+        if room._automation_move_in_progress or within_grace_period:
             # This is our own move (coordinator or select entity). Mirror to paired cover
             # if needed, but don't activate pause/override.
             if room.right_cover:
