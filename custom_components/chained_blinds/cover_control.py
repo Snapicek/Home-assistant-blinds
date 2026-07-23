@@ -77,8 +77,11 @@ async def _async_apply_positions(
                 blocking=True,
             )
     finally:
-        # Brief delay to let state-changed events be processed while flag is still True.
-        await asyncio.sleep(0.5)
+        # Wait for both covers' state-changed events to arrive and be processed
+        # while flag is still True. This prevents the mirrored cover's state change
+        # from being mistaken for a manual move. Increased to 2s to account for
+        # network/processing delays on slower systems.
+        await asyncio.sleep(2.0)
         room._automation_move_in_progress = False
 
     # Keep dwell bookkeeping on every real move.
