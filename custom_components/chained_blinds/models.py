@@ -36,6 +36,13 @@ class RoomRuntimeData:
     # state-changed event processing.
     _automation_move_in_progress: bool = False
 
+    # When the integration last issued a cover.set_cover_position call for
+    # *any* cover in this room (left, right, or a mirrored move). Covers are
+    # Zigbee devices sharing one mesh, so every call site funnels through
+    # cover_control.async_call_cover_service, which reads/updates this to
+    # keep at least STAGGER_SECONDS between any two outgoing commands.
+    _last_cover_command_time: datetime | None = None
+
     # Populated by the switch/select platforms during async_setup_entry so the
     # coordinator can read the operational entities (enabled, override,
     # state_select) directly. All tuning now lives on config_entry, not here.

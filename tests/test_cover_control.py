@@ -6,6 +6,8 @@ right cover is staggered after the left one, calibrated positions come from
 the config entry (falling back to defaults), and current_state /
 last_move_time / the state select are updated only here.
 """
+from datetime import datetime, timedelta, timezone
+
 from custom_components.chained_blinds import cover_control
 from custom_components.chained_blinds.const import SemanticState
 
@@ -110,6 +112,54 @@ async def test_ramp_move_steps_toward_target_without_updating_semantic_state():
     assert reached is False
     assert room.current_state is None
     assert hass.services.calls[-1][2]["position"] == 55.0
+
+
+async def test_call_cover_service_waits_stagger_seconds_between_commands(monkeypatch):
+    """Zigbee covers share a mesh: any two commands this integration issues
+    for a room, regardless of call site, must be at least STAGGER_SECONDS
+    apart -- not just the left/right pair inside a single move."""
+    hass = FakeHass()
+    room = make_room()
+
+    now = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(cover_control.dt_util, "utcnow", lambda: now)
+
+    sleep_calls: list[float] = []
+
+    async def _fake_sleep(seconds):
+        sleep_calls.append(seconds)
+
+    monkeypatch.setattr(cover_control.asyncio, "sleep", _fake_sleep)
+
+    await cover_control.async_call_cover_service(hass, room, "cover.a", 10)
+    assert sleep_calls == []  # nothing to wait for on the very first command
+
+    await cover_control.async_call_cover_service(hass, room, "cover.b", 20)
+    assert sleep_calls == [cover_control.STAGGER_SECONDS]
+
+    called_entity_ids = [c[2]["entity_id"] for c in hass.services.calls]
+    assert called_entity_ids == ["cover.a", "cover.b"]
+
+
+async def test_call_cover_service_skips_wait_once_interval_has_elapsed(monkeypatch):
+    hass = FakeHass()
+    room = make_room()
+
+    clock = {"now": datetime(2026, 7, 21, 12, 0, 0, tzinfo=timezone.utc)}
+    monkeypatch.setattr(cover_control.dt_util, "utcnow", lambda: clock["now"])
+
+    sleep_calls: list[float] = []
+
+    async def _fake_sleep(seconds):
+        sleep_calls.append(seconds)
+
+    monkeypatch.setattr(cover_control.asyncio, "sleep", _fake_sleep)
+
+    await cover_control.async_call_cover_service(hass, room, "cover.a", 10)
+    clock["now"] = clock["now"] + timedelta(seconds=cover_control.STAGGER_SECONDS + 1)
+    await cover_control.async_call_cover_service(hass, room, "cover.b", 20)
+
+    assert sleep_calls == []
 
 
 async def test_ramp_move_marks_state_when_target_reached():

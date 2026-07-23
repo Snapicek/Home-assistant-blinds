@@ -107,11 +107,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         if moved_entity_id == room.left_cover
                         else room.left_cover
                     )
-                    await hass.services.async_call(
-                        "cover",
-                        "set_cover_position",
-                        {"entity_id": other_cover, "position": position},
-                        blocking=True,
+                    await cover_control.async_call_cover_service(
+                        hass, room, other_cover, position
                     )
             return
 
@@ -148,11 +145,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     if moved_entity_id == room.left_cover
                     else room.left_cover
                 )
-                await hass.services.async_call(
-                    "cover",
-                    "set_cover_position",
-                    {"entity_id": other_cover, "position": position},
-                    blocking=True,
+                await cover_control.async_call_cover_service(
+                    hass, room, other_cover, position
                 )
 
     entry.async_on_unload(
