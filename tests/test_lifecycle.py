@@ -300,6 +300,94 @@ async def test_manual_move_of_right_cover_mirrors_onto_left(monkeypatch):
     ]
 
 
+async def test_late_settling_event_within_grace_period_does_not_activate_override(monkeypatch):
+    """A state-changed event arriving after `_automation_move_in_progress`
+    has cleared, but still inside the 30s grace window since the move
+    started, must be attributed to the automation's own (slow) cover --
+    not misread as a manual move that pauses the integration."""
+    hass = FakeHass()
+    hass.config_entries = _FakeConfigEntries()
+    entry = _FakeEntry()
+
+    listeners: list[tuple[list[str], object]] = []
+
+    def _fake_track_state_change_event(_hass, entities, callback):
+        listeners.append((list(entities), callback))
+        return lambda: None
+
+    monkeypatch.setattr(integration, "Store", _TypedFakeStore)
+    monkeypatch.setattr(integration, "ChainedBlindsCoordinator", _FakeCoordinator)
+    monkeypatch.setattr(integration, "async_track_state_change_event", _fake_track_state_change_event)
+
+    ok = await integration.async_setup_entry(hass, entry)
+    assert ok is True
+
+    room = hass.data[DOMAIN][entry.entry_id]
+    override = _FakeOverride()
+    room.entities["override"] = override
+    cover_listener = next(cb for ents, cb in listeners if room.left_cover in ents)
+
+    now = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(integration.dt_util, "utcnow", lambda: now)
+
+    # The automation issued a move 10s ago and has already cleared its
+    # in-progress flag, but the physical cover is still settling.
+    room.last_move_time = now - timedelta(seconds=10)
+    room._automation_move_in_progress = False
+
+    event = SimpleNamespace(
+        data={
+            "entity_id": room.left_cover,
+            "new_state": SimpleNamespace(attributes={"current_position": 50}),
+        }
+    )
+    await cover_listener(event)
+
+    assert override.turn_on_calls == 0
+
+
+async def test_move_after_grace_period_still_activates_override(monkeypatch):
+    """Once the grace window has elapsed, a state change is a real manual
+    move again and must still activate the override."""
+    hass = FakeHass()
+    hass.config_entries = _FakeConfigEntries()
+    entry = _FakeEntry()
+
+    listeners: list[tuple[list[str], object]] = []
+
+    def _fake_track_state_change_event(_hass, entities, callback):
+        listeners.append((list(entities), callback))
+        return lambda: None
+
+    monkeypatch.setattr(integration, "Store", _TypedFakeStore)
+    monkeypatch.setattr(integration, "ChainedBlindsCoordinator", _FakeCoordinator)
+    monkeypatch.setattr(integration, "async_track_state_change_event", _fake_track_state_change_event)
+
+    ok = await integration.async_setup_entry(hass, entry)
+    assert ok is True
+
+    room = hass.data[DOMAIN][entry.entry_id]
+    override = _FakeOverride()
+    room.entities["override"] = override
+    cover_listener = next(cb for ents, cb in listeners if room.left_cover in ents)
+
+    now = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(integration.dt_util, "utcnow", lambda: now)
+
+    room.last_move_time = now - timedelta(seconds=31)
+    room._automation_move_in_progress = False
+
+    event = SimpleNamespace(
+        data={
+            "entity_id": room.left_cover,
+            "new_state": SimpleNamespace(attributes={"current_position": 50}),
+        }
+    )
+    await cover_listener(event)
+
+    assert override.turn_on_calls == 1
+
+
 async def test_async_unload_entry_drops_room_data_when_platforms_unload(monkeypatch):
     hass = FakeHass()
     hass.config_entries = _FakeConfigEntries()
