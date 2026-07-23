@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
@@ -78,6 +78,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         cover_entities.append(room.right_cover)
 
     async def _async_handle_cover_state_change(event) -> None:
+        # A cover reporting in for the first time -- e.g. transitioning from
+        # unknown/unavailable to its real position as the Zigbee network
+        # reconnects after a Home Assistant restart -- is not a manual move.
+        # Without this guard, every restart pauses the automation the
+        # instant the cover's real state arrives.
+        old_state = event.data.get("old_state")
+        new_state = event.data.get("new_state")
+        if (
+            old_state is None
+            or old_state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE)
+            or new_state is None
+            or new_state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE)
+        ):
+            return
+
         # Check if this state change is from our own automation move. The
         # in-progress flag covers the moment the move is issued, but slow
         # covers keep emitting state-changed events (intermediate positions,

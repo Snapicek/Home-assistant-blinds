@@ -96,6 +96,31 @@ class _FakeOverride:
         self.turn_on_calls += 1
 
 
+def _cover_event(
+    entity_id: str,
+    position: int,
+    *,
+    old_state: str | None = "open",
+    new_state: str | None = "open",
+) -> SimpleNamespace:
+    """Build a cover state_changed event. Defaults to a real
+    known-state -> known-state transition (a genuine move); pass
+    old_state=None / "unavailable" / "unknown" to simulate the
+    first-report-after-(re)connect case the manual-move detector must
+    ignore."""
+    return SimpleNamespace(
+        data={
+            "entity_id": entity_id,
+            "old_state": SimpleNamespace(state=old_state) if old_state is not None else None,
+            "new_state": (
+                SimpleNamespace(state=new_state, attributes={"current_position": position})
+                if new_state is not None
+                else None
+            ),
+        }
+    )
+
+
 async def test_async_setup_entry_manual_move_activates_override(monkeypatch):
     hass = FakeHass()
     hass.config_entries = _FakeConfigEntries()
@@ -123,12 +148,7 @@ async def test_async_setup_entry_manual_move_activates_override(monkeypatch):
 
     # Fire the cover-change listener manually and ensure override is activated.
     cover_listener = next(cb for ents, cb in listeners if room.left_cover in ents)
-    event = SimpleNamespace(
-        data={
-            "entity_id": room.left_cover,
-            "new_state": SimpleNamespace(attributes={"current_position": 50}),
-        }
-    )
+    event = _cover_event(room.left_cover, 50)
     await cover_listener(event)
 
     assert override.turn_on_calls == 1
@@ -198,12 +218,7 @@ async def test_manual_move_skipped_when_override_already_on(monkeypatch):
 
     # When override is already on, manual move should be skipped
     override.is_on = True
-    event = SimpleNamespace(
-        data={
-            "entity_id": room.left_cover,
-            "new_state": SimpleNamespace(attributes={"current_position": 50}),
-        }
-    )
+    event = _cover_event(room.left_cover, 50)
     await cover_listener(event)
     assert override.turn_on_calls == 0
 
@@ -243,12 +258,7 @@ async def test_manual_move_mirrors_position_to_paired_cover(monkeypatch):
     cover_listener = next(cb for ents, cb in listeners if room.left_cover in ents)
 
     # Simulate a manual move of the left cover to 42%.
-    event = SimpleNamespace(
-        data={
-            "entity_id": room.left_cover,
-            "new_state": SimpleNamespace(attributes={"current_position": 42}),
-        }
-    )
+    event = _cover_event(room.left_cover, 42)
     await cover_listener(event)
 
     assert override.turn_on_calls == 1
@@ -289,18 +299,62 @@ async def test_manual_move_of_right_cover_mirrors_onto_left(monkeypatch):
     room.entities["override"] = override
     cover_listener = next(cb for ents, cb in listeners if room.left_cover in ents)
 
-    event = SimpleNamespace(
-        data={
-            "entity_id": room.right_cover,
-            "new_state": SimpleNamespace(attributes={"current_position": 17}),
-        }
-    )
+    event = _cover_event(room.right_cover, 17)
     await cover_listener(event)
 
     assert override.turn_on_calls == 1
     assert hass.services.calls == [
         ("cover", "set_cover_position", {"entity_id": room.left_cover, "position": 17}),
     ]
+
+
+async def test_cover_reconnecting_after_restart_does_not_activate_override(monkeypatch):
+    """A cover's first state report after HA (re)starts -- transitioning
+    from unavailable/unknown to its real position as the Zigbee network
+    reconnects -- must not be mistaken for a manual move. Without this
+    guard, every restart paused the automation the instant each cover's
+    real state arrived."""
+    hass = FakeHass()
+    hass.config_entries = _FakeConfigEntries()
+    entry = _FakeEntry()
+
+    listeners: list[tuple[list[str], object]] = []
+
+    def _fake_track_state_change_event(_hass, entities, callback):
+        listeners.append((list(entities), callback))
+        return lambda: None
+
+    monkeypatch.setattr(integration, "Store", _TypedFakeStore)
+    monkeypatch.setattr(integration, "ChainedBlindsCoordinator", _FakeCoordinator)
+    monkeypatch.setattr(integration, "async_track_state_change_event", _fake_track_state_change_event)
+
+    ok = await integration.async_setup_entry(hass, entry)
+    assert ok is True
+
+    room = hass.data[DOMAIN][entry.entry_id]
+    override = _FakeOverride()
+    room.entities["override"] = override
+    cover_listener = next(cb for ents, cb in listeners if room.left_cover in ents)
+
+    # No prior state at all (entity just registered on this restart).
+    await cover_listener(_cover_event(room.left_cover, 50, old_state=None))
+    assert override.turn_on_calls == 0
+
+    # Reconnecting from "unavailable" to a real position.
+    await cover_listener(_cover_event(room.left_cover, 50, old_state="unavailable"))
+    assert override.turn_on_calls == 0
+
+    # Reconnecting from "unknown" to a real position.
+    await cover_listener(_cover_event(room.left_cover, 50, old_state="unknown"))
+    assert override.turn_on_calls == 0
+
+    # The cover itself dropping offline is not a manual move either.
+    await cover_listener(_cover_event(room.left_cover, 50, new_state="unavailable"))
+    assert override.turn_on_calls == 0
+
+    # Sanity check: a real known-state -> known-state transition still counts.
+    await cover_listener(_cover_event(room.left_cover, 50))
+    assert override.turn_on_calls == 1
 
 
 async def test_late_settling_event_within_grace_period_does_not_activate_override(monkeypatch):
@@ -338,12 +392,7 @@ async def test_late_settling_event_within_grace_period_does_not_activate_overrid
     room.last_move_time = now - timedelta(seconds=10)
     room._automation_move_in_progress = False
 
-    event = SimpleNamespace(
-        data={
-            "entity_id": room.left_cover,
-            "new_state": SimpleNamespace(attributes={"current_position": 50}),
-        }
-    )
+    event = _cover_event(room.left_cover, 50)
     await cover_listener(event)
 
     assert override.turn_on_calls == 0
@@ -380,12 +429,7 @@ async def test_move_after_grace_period_still_activates_override(monkeypatch):
     room.last_move_time = now - timedelta(seconds=31)
     room._automation_move_in_progress = False
 
-    event = SimpleNamespace(
-        data={
-            "entity_id": room.left_cover,
-            "new_state": SimpleNamespace(attributes={"current_position": 50}),
-        }
-    )
+    event = _cover_event(room.left_cover, 50)
     await cover_listener(event)
 
     assert override.turn_on_calls == 1
