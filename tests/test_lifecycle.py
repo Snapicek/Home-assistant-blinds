@@ -11,11 +11,12 @@ from custom_components.chained_blinds.const import (
     CONF_LUX_SENSOR,
     CONF_RIGHT_COVER,
     DOMAIN,
+    SemanticState,
     WORKDAY_SENSOR_ENTITY_ID,
 )
 from custom_components.chained_blinds.switch import OverrideSwitch, _RoomSwitchBase
 
-from .fakes import FakeHass, FakeStore, make_room
+from .fakes import FakeHass, FakeSelect, FakeStore, make_room
 
 
 class _TypedFakeStore(FakeStore):
@@ -226,6 +227,41 @@ async def test_manual_move_skipped_when_override_already_on(monkeypatch):
     override.is_on = False
     await cover_listener(event)
     assert override.turn_on_calls == 1
+
+
+async def test_manual_move_syncs_current_state_and_select(monkeypatch):
+    """A manual cover move must update tracked current_state (nearest
+    calibrated state) and reflect it on the select, so the resolver doesn't
+    later run against a stale position when the override expires."""
+    hass = FakeHass()
+    hass.config_entries = _FakeConfigEntries()
+    entry = _FakeEntry()
+
+    listeners: list[tuple[list[str], object]] = []
+
+    def _fake_track_state_change_event(_hass, entities, callback):
+        listeners.append((list(entities), callback))
+        return lambda: None
+
+    monkeypatch.setattr(integration, "Store", _TypedFakeStore)
+    monkeypatch.setattr(integration, "ChainedBlindsCoordinator", _FakeCoordinator)
+    monkeypatch.setattr(integration, "async_track_state_change_event", _fake_track_state_change_event)
+
+    ok = await integration.async_setup_entry(hass, entry)
+    assert ok is True
+
+    room = hass.data[DOMAIN][entry.entry_id]
+    room.entities["override"] = _FakeOverride()
+    select = FakeSelect()
+    room.entities["state_select"] = select
+    cover_listener = next(cb for ents, cb in listeners if room.left_cover in ents)
+
+    # Default calibration: open75 medium50 shade25 closed0. 26% -> SHADE.
+    await cover_listener(_cover_event(room.left_cover, 26))
+
+    assert room.current_state == SemanticState.SHADE
+    assert select.updates == [SemanticState.SHADE]
+    assert room.store.saved is not None
 
 
 async def test_manual_move_mirrors_position_to_paired_cover(monkeypatch):

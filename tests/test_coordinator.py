@@ -518,3 +518,74 @@ async def test_ramp_retargets_when_desired_state_changes(monkeypatch):
     assert hass.services.calls[-1][2]["position"] == 75.0
 
 
+async def test_unavailable_lux_holds_position_and_never_moves(monkeypatch):
+    """A lux sensor reporting unavailable must not be read as 0 lux (dark),
+    which would reopen shades into direct sun. The coordinator holds."""
+    hass = FakeHass()
+    hass.states.set("sensor.living_room_illuminance", "unavailable")
+    room = make_room()
+    room.current_state = SemanticState.SHADE
+    room.entities["enabled"] = FakeSwitch(True)
+
+    coord = _make_coordinator(monkeypatch, hass, room)
+    result = await coord._async_update_data()
+
+    assert hass.services.calls == []
+    assert result["moved"] is False
+    assert result["lux_unavailable"] is True
+    assert room.current_state == SemanticState.SHADE
+
+
+async def test_missing_lux_state_holds_position(monkeypatch):
+    hass = FakeHass()  # no lux state set at all
+    room = make_room()
+    room.current_state = SemanticState.MEDIUM
+    room.entities["enabled"] = FakeSwitch(True)
+
+    coord = _make_coordinator(monkeypatch, hass, room)
+    result = await coord._async_update_data()
+
+    assert hass.services.calls == []
+    assert result["moved"] is False
+    assert result["lux_unavailable"] is True
+
+
+async def test_startup_reconciles_current_state_from_actual_position(monkeypatch):
+    """With no persisted state, the coordinator adopts the cover's real
+    reported position (nearest calibrated state) instead of defaulting to
+    OPEN, so hysteresis runs against reality after a restart."""
+    hass = FakeHass()
+    hass.states.set("sensor.living_room_illuminance", "0")  # dark daytime -> OPEN tier
+    hass.states.set(
+        "cover.living_room_left_blind",
+        "open",
+        attributes={"current_position": 26},  # nearest to shade (25)
+    )
+    room = make_room()
+    room.current_state = None
+    room.entities["enabled"] = FakeSwitch(True)
+
+    coord = _make_coordinator(monkeypatch, hass, room)
+    result = await coord._async_update_data()
+
+    assert result["current"] == SemanticState.SHADE
+
+
+async def test_startup_reconcile_does_not_override_persisted_state(monkeypatch):
+    hass = FakeHass()
+    hass.states.set("sensor.living_room_illuminance", "0")
+    hass.states.set(
+        "cover.living_room_left_blind",
+        "open",
+        attributes={"current_position": 26},
+    )
+    room = make_room()
+    room.current_state = SemanticState.MEDIUM  # persisted
+    room.entities["enabled"] = FakeSwitch(True)
+
+    coord = _make_coordinator(monkeypatch, hass, room)
+    result = await coord._async_update_data()
+
+    assert result["current"] == SemanticState.MEDIUM
+
+

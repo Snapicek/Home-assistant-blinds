@@ -5,6 +5,7 @@ import logging
 from datetime import datetime, time as dt_time, timedelta
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.sun import (
     SUN_EVENT_SUNRISE,
@@ -99,6 +100,37 @@ class ChainedBlindsCoordinator(DataUpdateCoordinator[dict]):
         )
         self.room = room
         self._config_entry = config_entry
+        self._reconciled = False
+
+    def _reconcile_current_state(self) -> None:
+        """On first eval, adopt the covers' real position as tracked state.
+
+        Restart recovery: if no state was persisted (fresh install, or the
+        Store/RestoreEntity had nothing), infer current_state from the left
+        cover's actual reported position instead of blindly defaulting to
+        OPEN -- otherwise the resolver's hysteresis runs against a state the
+        covers were never in.
+        """
+        if self._reconciled:
+            return
+        room = self.room
+        state = self.hass.states.get(room.left_cover)
+        if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            # Covers not up yet (Zigbee still reconnecting); try again next eval.
+            return
+        self._reconciled = True
+        if room.current_state is not None:
+            return
+        position = state.attributes.get("current_position")
+        try:
+            position = float(position) if position is not None else None
+        except (TypeError, ValueError):
+            position = None
+        if position is None:
+            return
+        room.current_state = cover_control.nearest_semantic_state(
+            self._config_entry, "left", position
+        )
 
     def _sunset_with_offset(self, now: datetime) -> datetime:
         offset_minutes = _get_config_value(self.hass, self._config_entry, CONF_SUNSET_OFFSET_MINUTES, DEFAULT_SUNSET_OFFSET_MINUTES)
@@ -138,10 +170,15 @@ class ChainedBlindsCoordinator(DataUpdateCoordinator[dict]):
         override_active = bool(override_entity.is_on) if override_entity is not None else False
 
         lux_state = self.hass.states.get(room.lux_sensor)
+        lux_available = lux_state is not None and lux_state.state not in (
+            STATE_UNAVAILABLE,
+            STATE_UNKNOWN,
+        )
         try:
-            lux = float(lux_state.state) if lux_state is not None else 0.0
+            lux = float(lux_state.state) if lux_available else 0.0
         except (TypeError, ValueError):
             lux = 0.0
+            lux_available = False
 
 
         now = dt_util.now()
@@ -162,6 +199,7 @@ class ChainedBlindsCoordinator(DataUpdateCoordinator[dict]):
         if _get_config_value(self.hass, self._config_entry, CONF_USE_SUNRISE_OPEN, DEFAULT_USE_SUNRISE_OPEN):
             # Keep resolver's pure time-of-day contract by passing only local HH:MM:SS.
             open_time = self._sunrise_with_offset(now).time().replace(tzinfo=None)
+        self._reconcile_current_state()
         current = room.current_state or SemanticState.OPEN
 
         result = {
@@ -170,9 +208,22 @@ class ChainedBlindsCoordinator(DataUpdateCoordinator[dict]):
             "lux": lux,
             "moved": False,
             "ramping": False,
+            "lux_unavailable": not lux_available,
         }
 
         if not enabled:
+            room.ramp_target_state = None
+            return result
+
+        # A dropped-out lux sensor must not be read as "0 lux = dark" -- that
+        # would reopen shades into direct sun. Hold current position (no move)
+        # until a real reading returns.
+        if not lux_available:
+            _LOGGER.debug(
+                "%s: lux sensor %s unavailable — holding position",
+                room.name,
+                room.lux_sensor,
+            )
             room.ramp_target_state = None
             return result
 

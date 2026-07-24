@@ -9,6 +9,7 @@ import asyncio
 import logging
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
@@ -32,7 +33,33 @@ async def async_call_cover_service(
     hass: HomeAssistant, room: RoomRuntimeData, entity_id: str, position: float
 ) -> None:
     """Call cover.set_cover_position, waiting out STAGGER_SECONDS since the
-    last command this integration sent to any of the room's covers."""
+    last command this integration sent to any of the room's covers.
+
+    Serialized per-room via room._command_lock so the coordinator loop and
+    the manual-move mirror can't race on stagger spacing / commanded-position
+    bookkeeping.
+    """
+    async with room._command_lock:
+        await _do_call_cover_service(hass, room, entity_id, position)
+
+
+async def _do_call_cover_service(
+    hass: HomeAssistant, room: RoomRuntimeData, entity_id: str, position: float
+) -> bool:
+    """Actual command work. Must be called with room._command_lock held.
+
+    Returns False (and skips the call) when the target cover is unavailable,
+    so callers don't record a move that never physically happened.
+    """
+    if not _is_cover_available(hass, entity_id):
+        _LOGGER.warning(
+            "%s: skipping set_cover_position(%s=%s%%) -- cover unavailable",
+            room.name,
+            entity_id,
+            position,
+        )
+        return False
+
     if room._last_cover_command_time is not None:
         wait = STAGGER_SECONDS - elapsed_seconds(room._last_cover_command_time, dt_util.utcnow())
         if wait > 0:
@@ -46,6 +73,21 @@ async def async_call_cover_service(
         {"entity_id": entity_id, "position": position},
         blocking=True,
     )
+    return True
+
+
+def _is_cover_available(hass: HomeAssistant, entity_id: str) -> bool:
+    """False only when the cover explicitly reports unavailable/unknown.
+
+    A missing state (None) means the entity isn't in the state machine yet
+    (very early startup); we let the service call proceed rather than block
+    -- the real bug this guards against is a device that dropped off the
+    Zigbee mesh and is actively reporting STATE_UNAVAILABLE.
+    """
+    state = hass.states.get(entity_id)
+    if state is None:
+        return True
+    return state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN)
 
 
 def _calibrated_position(config_entry: ConfigEntry, role: str, state: SemanticState) -> float:
@@ -53,6 +95,19 @@ def _calibrated_position(config_entry: ConfigEntry, role: str, state: SemanticSt
     config = {**config_entry.data, **config_entry.options}
     key = f"{role}_{state.value}_pos"
     return float(config.get(key, DEFAULT_CALIBRATION[state]))
+
+
+def nearest_semantic_state(config_entry: ConfigEntry, role: str, position: float) -> SemanticState:
+    """Map an actual cover position to the closest calibrated semantic state.
+
+    Used to keep internal state synchronized with reality after a manual
+    move (and on startup reconciliation) so hysteresis/dwell decisions run
+    against where the covers really are, not a stale tracked state.
+    """
+    return min(
+        SemanticState,
+        key=lambda state: abs(_calibrated_position(config_entry, role, state) - position),
+    )
 
 def _current_cover_position(hass: HomeAssistant, entity_id: str) -> float | None:
     state = hass.states.get(entity_id)
@@ -76,26 +131,39 @@ async def _async_apply_positions(
     right_position: float | None,
     final_state: SemanticState | None,
 ) -> None:
-    # Record the move start time before issuing any command so the
-    # manual-move detector's grace window (in __init__.py) covers the whole
-    # staggered sequence below -- not just the moment after it finishes.
-    # Otherwise a state_changed event fired by the left cover the instant
-    # it starts moving can race ahead of this timestamp and be mistaken for
-    # a manual move mid-automatic-move.
-    room.last_move_time = dt_util.utcnow()
+    # Never command a cover that isn't there: an unavailable left cover
+    # (Zigbee mesh down, or first refresh before the device reconnects on
+    # startup) means the move can't physically happen -- recording it would
+    # desync tracked state from reality. Abort without touching state.
+    if not _is_cover_available(hass, room.left_cover):
+        _LOGGER.warning(
+            "%s: skipping move -- left cover %s unavailable",
+            room.name,
+            room.left_cover,
+        )
+        return
 
-    # Flag that we're making an automation move so the manual-move detector
-    # can distinguish this from actual manual moves via state-changed events.
-    room._automation_move_in_progress = True
-    try:
-        await async_call_cover_service(hass, room, room.left_cover, left_position)
+    async with room._command_lock:
+        # Record the move start time before issuing any command so the
+        # manual-move detector's grace window (in __init__.py) covers the whole
+        # staggered sequence below -- not just the moment after it finishes.
+        # Otherwise a state_changed event fired by the left cover the instant
+        # it starts moving can race ahead of this timestamp and be mistaken for
+        # a manual move mid-automatic-move.
+        room.last_move_time = dt_util.utcnow()
 
-        if room.right_cover and right_position is not None:
-            await async_call_cover_service(hass, room, room.right_cover, right_position)
-    finally:
-        # Brief delay to let state-changed events be processed while flag is still True.
-        await asyncio.sleep(0.5)
-        room._automation_move_in_progress = False
+        # Flag that we're making an automation move so the manual-move detector
+        # can distinguish this from actual manual moves via state-changed events.
+        room._automation_move_in_progress = True
+        try:
+            await _do_call_cover_service(hass, room, room.left_cover, left_position)
+
+            if room.right_cover and right_position is not None:
+                await _do_call_cover_service(hass, room, room.right_cover, right_position)
+        finally:
+            # Brief delay to let state-changed events be processed while flag is still True.
+            await asyncio.sleep(0.5)
+            room._automation_move_in_progress = False
 
     # Keep dwell bookkeeping on every real move.
     if final_state is not None:

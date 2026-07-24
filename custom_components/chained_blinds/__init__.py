@@ -32,8 +32,7 @@ STORAGE_VERSION = 1
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up one room (config entry) from a config entry."""
     store = Store[dict](hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
-    # entry.options (written by the options flow) takes precedence over the
-    # original entry.data so that reconfiguration is actually applied.
+    # entry.options (written by the options flow) takes precedence over the    # original entry.data so that reconfiguration is actually applied.
     config = {**entry.data, **entry.options}
     room = RoomRuntimeData(
         entry_id=entry.entry_id,
@@ -162,6 +161,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Mark now so the mirrored move below (and its own state_changed
         # event on the paired cover) isn't mistaken for a second manual move.
         room.last_move_time = now
+
+        # Keep internal state synchronized with reality: map the actual
+        # reported position to the closest calibrated semantic state and
+        # record it (plus reflect it on the select). Without this the tracked
+        # current_state stays stale after a manual move, so when the override
+        # later expires the resolver runs hysteresis/dwell against a position
+        # the covers are no longer in.
+        if position is not None:
+            role = "left" if moved_entity_id == room.left_cover else "right"
+            synced_state = cover_control.nearest_semantic_state(
+                room.config_entry, role, position
+            )
+            room.current_state = synced_state
+            await room.async_persist()
+            state_select = room.entities.get("state_select")
+            if state_select is not None:
+                state_select.apply_external_state_update(synced_state)
 
         if override is not None:
             await override.async_turn_on()

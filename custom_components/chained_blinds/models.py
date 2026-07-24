@@ -2,6 +2,7 @@
 entities for a single config entry (= one room)."""
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -51,6 +52,14 @@ class RoomRuntimeData:
     # to what we last asked for as our own settling, not a manual move,
     # no matter how long the wobble continues.
     _last_commanded_position: dict[str, float] = field(default_factory=dict)
+
+    # Serializes all outgoing cover commands for this room. The coordinator
+    # evaluate loop and the manual-move mirror in __init__.py can otherwise
+    # enter cover_control concurrently and race on _last_cover_command_time,
+    # _last_commanded_position, last_move_time and the single
+    # _automation_move_in_progress flag -- defeating Zigbee stagger spacing
+    # and mis-attributing state-changed events.
+    _command_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     # Populated by the switch/select platforms during async_setup_entry so the
     # coordinator can read the operational entities (enabled, override,
