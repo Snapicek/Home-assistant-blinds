@@ -39,12 +39,14 @@
         "data": {
           "dwell_minutes": "Darkening delay",
           "reopen_dwell_minutes": "Reopening delay",
-          "override_duration_minutes": "Pause duration"
+          "override_duration_minutes": "Pause duration",
+          "max_travel_seconds": "Max travel time"
         },
         "data_description": {
           "dwell_minutes": "Minimum minutes between two darkening moves. Default: 10 min.",
           "reopen_dwell_minutes": "Minimum minutes before the blinds may lighten again. Default: 30 min.",
-          "override_duration_minutes": "How long the \"Pause automation\" switch (or a detected manual move) holds the current position before automation resumes. Default: 60 min."
+          "override_duration_minutes": "How long the \"Pause automation\" switch (or a detected manual move) holds the current position before automation resumes. Default: 60 min.",
+          "max_travel_seconds": "How long a blind may still be travelling toward a commanded position before further movement counts as manual. Raise it for slow motors. Default: 120 s."
         }
       },
       "sun_schedule": {
@@ -179,12 +181,14 @@
         "data": {
           "dwell_minutes": "Darkening delay",
           "reopen_dwell_minutes": "Reopening delay",
-          "override_duration_minutes": "Pause duration"
+          "override_duration_minutes": "Pause duration",
+          "max_travel_seconds": "Max travel time"
         },
         "data_description": {
           "dwell_minutes": "Minimum minutes between two darkening moves. Default: 10 min.",
           "reopen_dwell_minutes": "Minimum minutes before the blinds may lighten again. Default: 30 min.",
-          "override_duration_minutes": "How long the \"Pause automation\" switch (or a detected manual move) holds the current position before automation resumes. Default: 60 min."
+          "override_duration_minutes": "How long the \"Pause automation\" switch (or a detected manual move) holds the current position before automation resumes. Default: 60 min.",
+          "max_travel_seconds": "How long a blind may still be travelling toward a commanded position before further movement counts as manual. Raise it for slow motors. Default: 120 s."
         }
       },
       "sun_schedule": {

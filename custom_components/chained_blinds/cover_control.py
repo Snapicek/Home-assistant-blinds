@@ -13,9 +13,9 @@ from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from .const import DEFAULT_CALIBRATION, SemanticState
+from .const import DEFAULT_CALIBRATION, CommandSource, SemanticState
 from .helpers import elapsed_seconds, is_at_target, step_towards
-from .models import RoomRuntimeData
+from .models import CoverCommand, RoomRuntimeData
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,27 +30,63 @@ STAGGER_SECONDS = 1
 
 
 async def async_call_cover_service(
-    hass: HomeAssistant, room: RoomRuntimeData, entity_id: str, position: float
-) -> None:
+    hass: HomeAssistant,
+    room: RoomRuntimeData,
+    entity_id: str,
+    position: float,
+    *,
+    source: CommandSource = CommandSource.MANUAL_MIRROR,
+) -> bool:
     """Call cover.set_cover_position, waiting out STAGGER_SECONDS since the
     last command this integration sent to any of the room's covers.
 
     Serialized per-room via room._command_lock so the coordinator loop and
-    the manual-move mirror can't race on stagger spacing / commanded-position
-    bookkeeping.
+    the manual-move mirror can't race on stagger spacing / command-context
+    bookkeeping. `source` controls the command-time abort gate (see
+    _do_call_cover_service). Returns True if the command was issued.
     """
     async with room._command_lock:
-        await _do_call_cover_service(hass, room, entity_id, position)
+        return await _do_call_cover_service(hass, room, entity_id, position, source=source)
+
+
+def _automation_blocked(room: RoomRuntimeData) -> bool:
+    """True when an AUTOMATION command must be aborted right now.
+
+    Re-checked inside the command lock immediately before the service call
+    so a coordinator decision made before a manual move (or before the
+    override switch flipped on) can't overwrite the user.
+    """
+    if room.manual_pending:
+        return True
+    override = room.entities.get("override")
+    return bool(override is not None and override.is_on)
 
 
 async def _do_call_cover_service(
-    hass: HomeAssistant, room: RoomRuntimeData, entity_id: str, position: float
+    hass: HomeAssistant,
+    room: RoomRuntimeData,
+    entity_id: str,
+    position: float,
+    *,
+    source: CommandSource = CommandSource.AUTOMATION,
 ) -> bool:
     """Actual command work. Must be called with room._command_lock held.
 
     Returns False (and skips the call) when the target cover is unavailable,
-    so callers don't record a move that never physically happened.
+    or when an AUTOMATION command is aborted because override/manual_pending
+    is active -- so callers don't record a move that never physically
+    happened. Non-AUTOMATION sources (user select, manual mirror,
+    reconciliation) are never blocked by the gate.
     """
+    if source == CommandSource.AUTOMATION and _automation_blocked(room):
+        _LOGGER.debug(
+            "%s: aborting AUTOMATION set_cover_position(%s=%s%%) -- override/manual hold active",
+            room.name,
+            entity_id,
+            position,
+        )
+        return False
+
     if not _is_cover_available(hass, entity_id):
         _LOGGER.warning(
             "%s: skipping set_cover_position(%s=%s%%) -- cover unavailable",
@@ -66,7 +102,12 @@ async def _do_call_cover_service(
             await asyncio.sleep(wait)
 
     room._last_cover_command_time = dt_util.utcnow()
-    room._last_commanded_position[entity_id] = position
+    room._command_context[entity_id] = CoverCommand(
+        source=source,
+        start=_current_cover_position(hass, entity_id),
+        target=position,
+        started_at=dt_util.utcnow(),
+    )
     await hass.services.async_call(
         "cover",
         "set_cover_position",
@@ -95,6 +136,16 @@ def _calibrated_position(config_entry: ConfigEntry, role: str, state: SemanticSt
     config = {**config_entry.data, **config_entry.options}
     key = f"{role}_{state.value}_pos"
     return float(config.get(key, DEFAULT_CALIBRATION[state]))
+
+
+def calibrated_position(config_entry: ConfigEntry, role: str, state: SemanticState) -> float:
+    """Public accessor for a cover's calibrated position for a semantic state.
+
+    Used by the manual-move mirror so the paired cover is driven to *its
+    own* calibrated position for the semantic state the moved cover mapped
+    to -- never to the other cover's raw percentage.
+    """
+    return _calibrated_position(config_entry, role, state)
 
 
 def nearest_semantic_state(config_entry: ConfigEntry, role: str, position: float) -> SemanticState:
@@ -130,6 +181,7 @@ async def _async_apply_positions(
     left_position: float,
     right_position: float | None,
     final_state: SemanticState | None,
+    source: CommandSource = CommandSource.AUTOMATION,
 ) -> None:
     # Never command a cover that isn't there: an unavailable left cover
     # (Zigbee mesh down, or first refresh before the device reconnects on
@@ -144,22 +196,27 @@ async def _async_apply_positions(
         return
 
     async with room._command_lock:
-        # Record the move start time before issuing any command so the
-        # manual-move detector's grace window (in __init__.py) covers the whole
-        # staggered sequence below -- not just the moment after it finishes.
-        # Otherwise a state_changed event fired by the left cover the instant
-        # it starts moving can race ahead of this timestamp and be mistaken for
-        # a manual move mid-automatic-move.
-        room.last_move_time = dt_util.utcnow()
-
         # Flag that we're making an automation move so the manual-move detector
         # can distinguish this from actual manual moves via state-changed events.
         room._automation_move_in_progress = True
         try:
-            await _do_call_cover_service(hass, room, room.left_cover, left_position)
+            issued = await _do_call_cover_service(
+                hass, room, room.left_cover, left_position, source=source
+            )
+            # Command-time gate (override/manual_pending) or an unavailable
+            # cover aborted the left command: the move never happened, so
+            # don't record last_move_time / current_state against it.
+            if not issued:
+                return
+
+            # Record move start only once a command actually went out, so
+            # dwell bookkeeping reflects real physical moves.
+            room.last_move_time = dt_util.utcnow()
 
             if room.right_cover and right_position is not None:
-                await _do_call_cover_service(hass, room, room.right_cover, right_position)
+                await _do_call_cover_service(
+                    hass, room, room.right_cover, right_position, source=source
+                )
         finally:
             # Brief delay to let state-changed events be processed while flag is still True.
             await asyncio.sleep(0.5)
@@ -176,7 +233,12 @@ async def _async_apply_positions(
 
 
 async def async_move_to_state(
-    hass: HomeAssistant, config_entry: ConfigEntry, room: RoomRuntimeData, target_state: SemanticState
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    room: RoomRuntimeData,
+    target_state: SemanticState,
+    *,
+    source: CommandSource = CommandSource.AUTOMATION,
 ) -> None:
     """Move the room's cover(s) to `target_state`'s calibrated position."""
     left_position = _calibrated_position(config_entry, "left", target_state)
@@ -189,6 +251,7 @@ async def async_move_to_state(
         left_position=left_position,
         right_position=right_position,
         final_state=target_state,
+        source=source,
     )
 
     _LOGGER.debug(
@@ -230,6 +293,7 @@ async def async_move_towards_state(
         left_position=left_next,
         right_position=right_next,
         final_state=target_state if reached else None,
+        source=CommandSource.AUTOMATION,
     )
 
     _LOGGER.debug(

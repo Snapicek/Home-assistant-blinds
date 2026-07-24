@@ -17,6 +17,22 @@ if TYPE_CHECKING:
 
 
 @dataclass
+class CoverCommand:
+    """Record of the last cover.set_cover_position call for one cover.
+
+    Used for direction-aware own-move detection: while the reported
+    position stays within the [start, target] travel band (plus tolerance)
+    and inside the max-travel window, movement is attributed to this
+    command; movement outside the band is a manual move.
+    """
+
+    source: str
+    start: float | None
+    target: float
+    started_at: datetime
+
+
+@dataclass
 class RoomRuntimeData:
     """Static wiring + mutable tracked state for one config entry."""
 
@@ -37,6 +53,13 @@ class RoomRuntimeData:
     # state-changed event processing.
     _automation_move_in_progress: bool = False
 
+    # Latched True the instant a manual move is detected, and held for the
+    # whole override period. The command-time gate in cover_control aborts
+    # AUTOMATION commands while this is set, so an in-flight coordinator
+    # decision can't overwrite a manual move. Cleared only when the override
+    # expires, after current_state has been re-seeded from live position.
+    manual_pending: bool = False
+
     # When the integration last issued a cover.set_cover_position call for
     # *any* cover in this room (left, right, or a mirrored move). Covers are
     # Zigbee devices sharing one mesh, so every call site funnels through
@@ -44,14 +67,12 @@ class RoomRuntimeData:
     # keep at least STAGGER_SECONDS between any two outgoing commands.
     _last_cover_command_time: datetime | None = None
 
-    # Per-cover entity_id -> last position this integration itself commanded
-    # via cover.set_cover_position. Chain-driven blinds rarely land exactly
-    # on the commanded percentage (a "50" can settle at 52 and keep
-    # wobbling between adjacent values for minutes) -- the manual-move
-    # detector in __init__.py treats a reported position that's still close
-    # to what we last asked for as our own settling, not a manual move,
-    # no matter how long the wobble continues.
-    _last_commanded_position: dict[str, float] = field(default_factory=dict)
+    # Per-cover entity_id -> the last command this integration issued for it
+    # (source, start position, target, timestamp). Drives direction-aware
+    # own-move detection in __init__.py so a physical move away from the
+    # commanded target is recognised as manual even while a slow cover is
+    # still settling.
+    _command_context: dict[str, CoverCommand] = field(default_factory=dict)
 
     # Serializes all outgoing cover commands for this room. The coordinator
     # evaluate loop and the manual-move mirror in __init__.py can otherwise

@@ -24,6 +24,7 @@ from .const import (
     CONF_LUX_MEDIUM,
     CONF_LUX_MEDIUM_REOPEN,
     CONF_LUX_SENSOR,
+    CONF_MAX_TRAVEL_SECONDS,
     CONF_NON_WORKDAY_OPEN_TIME,
     CONF_OPEN_TIME,
     CONF_OVERRIDE_DURATION_MINUTES,
@@ -45,6 +46,7 @@ from .const import (
     DEFAULT_LUX_HIGH_REOPEN,
     DEFAULT_LUX_MEDIUM,
     DEFAULT_LUX_MEDIUM_REOPEN,
+    DEFAULT_MAX_TRAVEL_SECONDS,
     DEFAULT_NON_WORKDAY_OPEN_TIME,
     DEFAULT_OPEN_TIME,
     DEFAULT_OVERRIDE_DURATION_MINUTES,
@@ -130,6 +132,12 @@ def _build_dwell_schema(current: dict[str, Any]) -> vol.Schema:
                 default=current.get(CONF_OVERRIDE_DURATION_MINUTES, DEFAULT_OVERRIDE_DURATION_MINUTES),
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(min=1, max=1440, step=1, unit_of_measurement="min")
+            ),
+            vol.Required(
+                CONF_MAX_TRAVEL_SECONDS,
+                default=current.get(CONF_MAX_TRAVEL_SECONDS, DEFAULT_MAX_TRAVEL_SECONDS),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(min=5, max=600, step=5, unit_of_measurement="s")
             ),
         }
     )

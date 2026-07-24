@@ -9,9 +9,9 @@ last_move_time / the state select are updated only here.
 from datetime import datetime, timedelta, timezone
 
 from custom_components.chained_blinds import cover_control
-from custom_components.chained_blinds.const import SemanticState
+from custom_components.chained_blinds.const import CommandSource, SemanticState
 
-from .fakes import FakeHass, FakeSelect, make_room
+from .fakes import FakeHass, FakeSelect, FakeSwitch, make_room
 
 
 async def test_moves_left_cover_only_using_calibrated_position():
@@ -141,16 +141,17 @@ async def test_call_cover_service_waits_stagger_seconds_between_commands(monkeyp
     assert called_entity_ids == ["cover.a", "cover.b"]
 
 
-async def test_call_cover_service_records_commanded_position(monkeypatch):
-    """The manual-move detector in __init__.py relies on
-    room._last_commanded_position to recognize a cover settling near its
-    own commanded target, so every call must record it here."""
+async def test_call_cover_service_records_command_context(monkeypatch):
+    """Own-move (direction-band) detection in __init__.py relies on
+    room._command_context recording the target of each command, so every
+    call must record it here."""
     hass = FakeHass()
     room = make_room()
 
     await cover_control.async_call_cover_service(hass, room, "cover.a", 42)
 
-    assert room._last_commanded_position["cover.a"] == 42
+    ctx = room._command_context["cover.a"]
+    assert ctx.target == 42
 
 
 async def test_call_cover_service_skips_wait_once_interval_has_elapsed(monkeypatch):
@@ -220,7 +221,7 @@ async def test_call_cover_service_skips_unavailable_cover():
     await cover_control.async_call_cover_service(hass, room, "cover.a", 42)
 
     assert hass.services.calls == []
-    assert "cover.a" not in room._last_commanded_position
+    assert "cover.a" not in room._command_context
 
 
 async def test_nearest_semantic_state_maps_position_to_closest_calibration():
@@ -237,6 +238,71 @@ def test_stagger_is_at_least_one_second():
     """Zigbee mesh safety: the enforced gap between any two commands must be
     at least 1 second."""
     assert cover_control.STAGGER_SECONDS >= 1
+
+
+async def test_automation_move_aborts_when_manual_pending_set():
+    """The core race: the coordinator decided to move, then manual_pending
+    became true before set_cover_position. The command-time re-check must
+    abort the AUTOMATION command -- no cover service call, no state change."""
+    hass = FakeHass()
+    room = make_room()
+
+    # A manual move latched the hold in the window between decision and command.
+    room.manual_pending = True
+
+    await cover_control.async_move_to_state(
+        hass, room.config_entry, room, SemanticState.SHADE, source=CommandSource.AUTOMATION
+    )
+
+    assert hass.services.calls == []
+    assert room.current_state is None
+    assert room.last_move_time is None
+    assert room.store.saved is None
+
+
+async def test_automation_move_aborts_when_override_on():
+    """Same gate, driven by the override switch already being on."""
+    hass = FakeHass()
+    room = make_room()
+    room.entities["override"] = FakeSwitch(is_on=True)
+
+    await cover_control.async_move_to_state(
+        hass, room.config_entry, room, SemanticState.SHADE
+    )
+
+    assert hass.services.calls == []
+    assert room.current_state is None
+
+
+async def test_non_automation_command_not_blocked_by_manual_pending():
+    """USER / MANUAL_MIRROR / RECONCILIATION commands must never be dropped
+    by the automation gate -- user actions always take effect."""
+    hass = FakeHass()
+    room = make_room()
+    room.manual_pending = True
+    room.entities["override"] = FakeSwitch(is_on=True)
+
+    issued = await cover_control.async_call_cover_service(
+        hass, room, room.left_cover, 30, source=CommandSource.MANUAL_MIRROR
+    )
+
+    assert issued is True
+    assert hass.services.calls == [
+        ("cover", "set_cover_position", {"entity_id": room.left_cover, "position": 30}),
+    ]
+
+
+async def test_user_forced_move_not_blocked_by_manual_pending():
+    hass = FakeHass()
+    room = make_room()
+    room.manual_pending = True
+
+    await cover_control.async_move_to_state(
+        hass, room.config_entry, room, SemanticState.MEDIUM, source=CommandSource.USER
+    )
+
+    assert hass.services.calls[0][2]["position"] == 50.0
+    assert room.current_state == SemanticState.MEDIUM
 
 
 async def test_full_move_waits_one_second_between_left_and_right(monkeypatch):

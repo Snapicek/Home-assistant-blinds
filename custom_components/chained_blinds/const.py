@@ -19,6 +19,21 @@ class SemanticState(StrEnum):
     CLOSED = "closed"
 
 
+class CommandSource(StrEnum):
+    """Origin of a cover.set_cover_position call this integration issues.
+
+    Only AUTOMATION commands are subject to the command-time override /
+    manual_pending abort gate. USER (select), MANUAL_MIRROR (pairing the
+    other cover after a manual move) and RECONCILIATION commands are
+    user-driven or state-syncing and must never be silently dropped.
+    """
+
+    AUTOMATION = "automation"
+    USER = "user"
+    MANUAL_MIRROR = "manual_mirror"
+    RECONCILIATION = "reconciliation"
+
+
 # Darkening = moving to a higher rank; lightening = moving to a lower rank.
 RANK: dict[SemanticState, int] = {
     SemanticState.OPEN: 0,
@@ -52,6 +67,7 @@ CONF_USE_SUNRISE_OPEN = "use_sunrise_open"
 CONF_RAMP_ENABLED = "ramp_enabled"
 CONF_OPEN_TIME = "open_time"
 CONF_NON_WORKDAY_OPEN_TIME = "non_workday_open_time"
+CONF_MAX_TRAVEL_SECONDS = "max_travel_seconds"
 
 # Default calibrated raw positions (%), per semantic state. Must be tuned
 # per physical cover — these are just seed values for the config-flow
@@ -96,6 +112,12 @@ DEFAULT_SEASONAL_SPLIT = False
 DEFAULT_USE_SUNRISE_OPEN = False
 DEFAULT_RAMP_ENABLED = False
 WORKDAY_SENSOR_ENTITY_ID = "binary_sensor.workday_sensor"
+
+# Upper bound (seconds) on how long a physical cover may still be travelling
+# toward the position this integration last commanded. Beyond this, further
+# position reports are no longer attributed to our own move and count as
+# manual. Also bounds the direction-band own-move check.
+DEFAULT_MAX_TRAVEL_SECONDS = 120.0
 
 COVER_ROLES = ("left", "right")
 

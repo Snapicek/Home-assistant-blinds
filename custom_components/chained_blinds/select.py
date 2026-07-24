@@ -9,7 +9,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import DOMAIN, SemanticState
+from .const import DOMAIN, CommandSource, SemanticState
 from .models import RoomRuntimeData
 
 
@@ -58,7 +58,13 @@ class ChainedBlindsStateSelect(SelectEntity, RestoreEntity):
         # method, never by importing this class).
         from .cover_control import async_move_to_state
 
-        await async_move_to_state(self.hass, self._room.config_entry, self._room, SemanticState(option))
+        await async_move_to_state(
+            self.hass,
+            self._room.config_entry,
+            self._room,
+            SemanticState(option),
+            source=CommandSource.USER,
+        )
 
         # A manually forced state is a manual move too: pause automation so
         # the resolver doesn't immediately re-evaluate and move away from

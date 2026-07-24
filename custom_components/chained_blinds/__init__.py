@@ -13,7 +13,10 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_LEFT_COVER,
     CONF_LUX_SENSOR,
+    CONF_MAX_TRAVEL_SECONDS,
     CONF_RIGHT_COVER,
+    CommandSource,
+    DEFAULT_MAX_TRAVEL_SECONDS,
     DOMAIN,
     WORKDAY_SENSOR_ENTITY_ID,
 )
@@ -66,46 +69,66 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # ------------------------------------------------------------------ #
     # Manual-move detection: watch the cover entities themselves.
-    # Any position change that arrives more than 30 s after the last
-    # integration-initiated move -- and isn't just the cover settling near
-    # where we last told it to go -- is treated as a manual move and the
-    # Override switch is activated automatically so the automation does
-    # not immediately undo what the user just did.
+    #
+    # A position change is attributed to our own move only while the cover
+    # is still travelling toward the position we last commanded -- i.e. the
+    # reported position stays within the [start, target] band (plus a small
+    # tolerance for chain-blind wobble) and inside the max-travel window.
+    # Anything moving *away* from the commanded target, or arriving after the
+    # travel window, is a manual move: the override switch is engaged so the
+    # automation does not immediately undo what the user just did.
     # ------------------------------------------------------------------ #
-    _MANUAL_MOVE_GRACE_SECONDS = 30
     # Chain-driven blinds rarely land exactly on the commanded percentage
-    # (a "50" can settle at 52, or wobble between adjacent values for
-    # minutes). A reported position still within this tolerance of what we
-    # last commanded is our own settling, not a manual move -- regardless
-    # of how long the wobble continues, hence no time limit of its own
-    # (only bounded by _SETTLING_MAX_SECONDS below so a stale commanded
-    # position from long ago can't mask a real manual move).
-    _SETTLING_TOLERANCE_PERCENT = 5
-    _SETTLING_MAX_SECONDS = 600
+    # (a "50" can settle at 52, or wobble between adjacent values), so allow
+    # this tolerance around the travel band before calling a move manual.
+    _BAND_TOLERANCE_PERCENT = 5
+    _config = {**entry.data, **entry.options}
+    _max_travel_seconds = float(
+        _config.get(CONF_MAX_TRAVEL_SECONDS, DEFAULT_MAX_TRAVEL_SECONDS)
+    )
 
     cover_entities = [room.left_cover]
     if room.right_cover:
         cover_entities.append(room.right_cover)
 
-    def _is_settling_near_commanded_position(entity_id, position, now) -> bool:
+    def _is_own_move(entity_id, position, now) -> bool:
+        """True while the cover is still travelling toward our last command."""
+        ctx = room._command_context.get(entity_id)
+        if ctx is None:
+            return False
+        if elapsed_seconds(ctx.started_at, now) > _max_travel_seconds:
+            return False
         if position is None:
-            return False
-        commanded = room._last_commanded_position.get(entity_id)
-        if commanded is None:
-            return False
-        if abs(position - commanded) > _SETTLING_TOLERANCE_PERCENT:
-            return False
-        return (
-            room.last_move_time is not None
-            and elapsed_seconds(room.last_move_time, now) < _SETTLING_MAX_SECONDS
-        )
+            # Can't judge direction; trust the travel window.
+            return True
+        if abs(position - ctx.target) <= _BAND_TOLERANCE_PERCENT:
+            return True
+        start = ctx.start if ctx.start is not None else ctx.target
+        low = min(start, ctx.target) - _BAND_TOLERANCE_PERCENT
+        high = max(start, ctx.target) + _BAND_TOLERANCE_PERCENT
+        return low <= position <= high
 
-    async def _async_mirror_position(moved_entity_id, position) -> None:
-        if room.right_cover and position is not None:
-            other_cover = (
-                room.right_cover if moved_entity_id == room.left_cover else room.left_cover
-            )
-            await cover_control.async_call_cover_service(hass, room, other_cover, position)
+    async def _async_mirror_manual(moved_entity_id, position) -> None:
+        """Mirror a confirmed manual move onto the paired cover.
+
+        Maps the moved cover's actual position to its nearest semantic state,
+        then drives the paired cover to *its own* calibrated position for that
+        state -- never the raw percentage, since the two covers may have
+        different calibration.
+        """
+        if not room.right_cover or position is None:
+            return
+        if moved_entity_id == room.left_cover:
+            role, other_cover, other_role = "left", room.right_cover, "right"
+        else:
+            role, other_cover, other_role = "right", room.left_cover, "left"
+        state = cover_control.nearest_semantic_state(room.config_entry, role, position)
+        other_position = cover_control.calibrated_position(
+            room.config_entry, other_role, state
+        )
+        await cover_control.async_call_cover_service(
+            hass, room, other_cover, other_position, source=CommandSource.MANUAL_MIRROR
+        )
 
     async def _async_handle_cover_state_change(event) -> None:
         # A cover reporting in for the first time -- e.g. transitioning from
@@ -127,47 +150,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         position = new_state.attributes.get("current_position")
         now = dt_util.utcnow()
 
-        # Check if this state change is from our own automation move. The
-        # in-progress flag covers the moment the move is issued, but slow
-        # covers keep emitting state-changed events (intermediate positions,
-        # final settle) well after the flag has already cleared -- those
-        # still need to be attributed to the automation, not the user, or
-        # every automatic move ends up pausing itself. So we also honor the
-        # grace window below, keyed off when the move actually started, and
-        # the position-tolerance check above for settling that outlasts it.
-        within_grace_period = (
-            room.last_move_time is not None
-            and elapsed_seconds(room.last_move_time, now) < _MANUAL_MOVE_GRACE_SECONDS
-        )
-        if (
-            room._automation_move_in_progress
-            or within_grace_period
-            or _is_settling_near_commanded_position(moved_entity_id, position, now)
-        ):
-            # This is our own move (coordinator or select entity). Mirror to paired cover
-            # if needed, but don't activate pause/override.
-            await _async_mirror_position(moved_entity_id, position)
+        # Own automation move (either issuing right now, or the cover still
+        # travelling toward what we commanded): don't pause, don't mirror --
+        # the automation move path already commanded both covers.
+        if room._automation_move_in_progress or _is_own_move(moved_entity_id, position, now):
             return
 
-        # Real manual move detected.
-        # Skip if automation is already paused.
+        # Real manual move. Latch synchronously *before any await* so an
+        # in-flight coordinator decision re-checks manual_pending before its
+        # own set_cover_position and aborts instead of overwriting the user.
+        room.manual_pending = True
+
         override = room.entities.get("override")
-        if override is not None and override.is_on:
-            return
 
-        _LOGGER.info(
-            "%s: manual cover move detected — activating override", room.name
-        )
-        # Mark now so the mirrored move below (and its own state_changed
-        # event on the paired cover) isn't mistaken for a second manual move.
-        room.last_move_time = now
-
-        # Keep internal state synchronized with reality: map the actual
-        # reported position to the closest calibrated semantic state and
-        # record it (plus reflect it on the select). Without this the tracked
-        # current_state stays stale after a manual move, so when the override
-        # later expires the resolver runs hysteresis/dwell against a position
-        # the covers are no longer in.
+        # Keep internal state synchronized with reality on every manual move
+        # (even when override is already on) so that when it later expires the
+        # resolver runs hysteresis/dwell against where the covers really are.
         if position is not None:
             role = "left" if moved_entity_id == room.left_cover else "right"
             synced_state = cover_control.nearest_semantic_state(
@@ -179,13 +177,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if state_select is not None:
                 state_select.apply_external_state_update(synced_state)
 
+        # Engage / extend the hold. A fresh manual move slides the expiry so
+        # continued manual activity keeps the automation paused.
         if override is not None:
-            await override.async_turn_on()
+            if override.is_on:
+                override.slide_expiry()
+            else:
+                _LOGGER.info(
+                    "%s: manual cover move detected — activating override", room.name
+                )
+                await override.async_turn_on()
 
-        # Keep both covers aligned: mirror the moved cover's new position
-        # onto its pair so a manual adjustment of one blind is reflected on
-        # both, not just the one that was touched.
-        await _async_mirror_position(moved_entity_id, position)
+        # Keep both covers aligned: mirror the moved cover's semantic state
+        # onto its pair using the pair's own calibration.
+        await _async_mirror_manual(moved_entity_id, position)
 
     entry.async_on_unload(
         async_track_state_change_event(

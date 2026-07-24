@@ -15,8 +15,17 @@ from custom_components.chained_blinds.const import (
     WORKDAY_SENSOR_ENTITY_ID,
 )
 from custom_components.chained_blinds.switch import OverrideSwitch, _RoomSwitchBase
+from custom_components.chained_blinds.models import CoverCommand
 
 from .fakes import FakeHass, FakeSelect, FakeStore, make_room
+
+
+def _seed_command_context(room, entity_id, *, start, target, started_at, source="automation"):
+    """Register a prior integration command so own-move (direction-band)
+    detection can be exercised deterministically."""
+    room._command_context[entity_id] = CoverCommand(
+        source=source, start=start, target=target, started_at=started_at
+    )
 
 
 class _TypedFakeStore(FakeStore):
@@ -91,10 +100,14 @@ class _FakeOverride:
     def __init__(self) -> None:
         self.is_on = False
         self.turn_on_calls = 0
+        self.slide_calls = 0
 
     async def async_turn_on(self, **kwargs):
         self.is_on = True
         self.turn_on_calls += 1
+
+    def slide_expiry(self) -> None:
+        self.slide_calls += 1
 
 
 def _cover_event(
@@ -217,11 +230,14 @@ async def test_manual_move_skipped_when_override_already_on(monkeypatch):
     room.entities["override"] = override
     cover_listener = next(cb for ents, cb in listeners if room.left_cover in ents)
 
-    # When override is already on, manual move should be skipped
+    # When override is already on, a manual move must not re-trigger turn_on
+    # but should slide the expiry (extend the hold) and keep state in sync.
     override.is_on = True
     event = _cover_event(room.left_cover, 50)
     await cover_listener(event)
     assert override.turn_on_calls == 0
+    assert override.slide_calls == 1
+    assert room.manual_pending is True
 
     # When override is off, manual move should activate it
     override.is_on = False
@@ -298,8 +314,11 @@ async def test_manual_move_mirrors_position_to_paired_cover(monkeypatch):
     await cover_listener(event)
 
     assert override.turn_on_calls == 1
+    # 42% maps to the nearest calibrated semantic state (MEDIUM=50), and the
+    # paired cover is driven to *its own* calibrated MEDIUM position, not the
+    # raw 42%.
     assert hass.services.calls == [
-        ("cover", "set_cover_position", {"entity_id": room.right_cover, "position": 42}),
+        ("cover", "set_cover_position", {"entity_id": room.right_cover, "position": 50.0}),
     ]
     # The mirror call must go through the same Zigbee-spacing gate as every
     # other cover command, not bypass it via a raw service call.
@@ -339,8 +358,10 @@ async def test_manual_move_of_right_cover_mirrors_onto_left(monkeypatch):
     await cover_listener(event)
 
     assert override.turn_on_calls == 1
+    # 17% maps to nearest calibrated state (SHADE=25); the left (paired) cover
+    # is driven to its own calibrated SHADE position.
     assert hass.services.calls == [
-        ("cover", "set_cover_position", {"entity_id": room.left_cover, "position": 17}),
+        ("cover", "set_cover_position", {"entity_id": room.left_cover, "position": 25.0}),
     ]
 
 
@@ -394,10 +415,10 @@ async def test_cover_reconnecting_after_restart_does_not_activate_override(monke
 
 
 async def test_late_settling_event_within_grace_period_does_not_activate_override(monkeypatch):
-    """A state-changed event arriving after `_automation_move_in_progress`
-    has cleared, but still inside the 30s grace window since the move
-    started, must be attributed to the automation's own (slow) cover --
-    not misread as a manual move that pauses the integration."""
+    """A state-changed event while the cover is still travelling toward the
+    position we last commanded (reported position inside the [start, target]
+    band, within the max-travel window) is our own move -- not a manual move
+    that pauses the integration."""
     hass = FakeHass()
     hass.config_entries = _FakeConfigEntries()
     entry = _FakeEntry()
@@ -423,20 +444,24 @@ async def test_late_settling_event_within_grace_period_does_not_activate_overrid
     now = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
     monkeypatch.setattr(integration.dt_util, "utcnow", lambda: now)
 
-    # The automation issued a move 10s ago and has already cleared its
-    # in-progress flag, but the physical cover is still settling.
-    room.last_move_time = now - timedelta(seconds=10)
+    # Automation commanded 50 (from 75) 10s ago; cover now reporting 60 --
+    # still inside the travel band, so this is our own settling.
+    _seed_command_context(
+        room, room.left_cover, start=75, target=50, started_at=now - timedelta(seconds=10)
+    )
     room._automation_move_in_progress = False
 
-    event = _cover_event(room.left_cover, 50)
+    event = _cover_event(room.left_cover, 60)
     await cover_listener(event)
 
     assert override.turn_on_calls == 0
 
 
 async def test_move_after_grace_period_still_activates_override(monkeypatch):
-    """Once the grace window has elapsed, a state change is a real manual
-    move again and must still activate the override."""
+    """A reported position outside the travel band is a real manual move
+    (the user pushed the cover away from where automation was driving it)
+    and must still activate the override, even inside the max-travel
+    window."""
     hass = FakeHass()
     hass.config_entries = _FakeConfigEntries()
     entry = _FakeEntry()
@@ -462,21 +487,24 @@ async def test_move_after_grace_period_still_activates_override(monkeypatch):
     now = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
     monkeypatch.setattr(integration.dt_util, "utcnow", lambda: now)
 
-    room.last_move_time = now - timedelta(seconds=31)
+    # Commanded 50 (from 75) 10s ago; user yanks it to 90 -- above the band
+    # high bound (80), so it's manual.
+    _seed_command_context(
+        room, room.left_cover, start=75, target=50, started_at=now - timedelta(seconds=10)
+    )
     room._automation_move_in_progress = False
 
-    event = _cover_event(room.left_cover, 50)
+    event = _cover_event(room.left_cover, 90)
     await cover_listener(event)
 
     assert override.turn_on_calls == 1
 
 
 async def test_settling_near_commanded_position_ignored_past_grace_window(monkeypatch):
-    """Chain-driven blinds rarely land exactly on the commanded percentage
-    and can keep wobbling between adjacent values for minutes. A position
-    close to what we last commanded must not activate override no matter
-    how long the wobble continues -- unlike the flag/grace-window checks,
-    this one isn't time-limited (until _SETTLING_MAX_SECONDS)."""
+    """Chain-driven blinds wobble between adjacent values around the
+    commanded target. A position within tolerance of the target, inside the
+    max-travel window, must not activate override no matter how the value
+    wobbles."""
     hass = FakeHass()
     hass.config_entries = _FakeConfigEntries()
     entry = _FakeEntry()
@@ -502,11 +530,11 @@ async def test_settling_near_commanded_position_ignored_past_grace_window(monkey
     now = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
     monkeypatch.setattr(integration.dt_util, "utcnow", lambda: now)
 
-    # We commanded 50 several minutes ago -- well past the 30s grace
-    # window -- and the flag has long since cleared.
-    room.last_move_time = now - timedelta(minutes=3)
+    # We commanded 50 a minute ago (inside the 120s travel window).
+    _seed_command_context(
+        room, room.left_cover, start=50, target=50, started_at=now - timedelta(seconds=60)
+    )
     room._automation_move_in_progress = False
-    room._last_commanded_position[room.left_cover] = 50
 
     # The blind is still wobbling near 50 (e.g. 52, then 48).
     await cover_listener(_cover_event(room.left_cover, 52))
@@ -544,9 +572,10 @@ async def test_settling_tolerance_does_not_mask_a_real_manual_move(monkeypatch):
     now = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
     monkeypatch.setattr(integration.dt_util, "utcnow", lambda: now)
 
-    room.last_move_time = now - timedelta(minutes=3)
+    _seed_command_context(
+        room, room.left_cover, start=50, target=50, started_at=now - timedelta(seconds=60)
+    )
     room._automation_move_in_progress = False
-    room._last_commanded_position[room.left_cover] = 50
 
     # Someone pulled it most of the way open -- nowhere near the 5%
     # tolerance around the commanded 50.
@@ -555,9 +584,8 @@ async def test_settling_tolerance_does_not_mask_a_real_manual_move(monkeypatch):
 
 
 async def test_settling_tolerance_expires_for_a_stale_commanded_position(monkeypatch):
-    """A commanded position from long ago (beyond _SETTLING_MAX_SECONDS)
-    must not permanently immunize that percentage against manual-move
-    detection."""
+    """A command from long ago (beyond the max-travel window) must not
+    permanently immunize that percentage against manual-move detection."""
     hass = FakeHass()
     hass.config_entries = _FakeConfigEntries()
     entry = _FakeEntry()
@@ -583,9 +611,12 @@ async def test_settling_tolerance_expires_for_a_stale_commanded_position(monkeyp
     now = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
     monkeypatch.setattr(integration.dt_util, "utcnow", lambda: now)
 
-    room.last_move_time = now - timedelta(seconds=601)
+    # Commanded 50 more than the 120s max-travel window ago: the cover can't
+    # still be settling, so a report near 50 is now a manual move.
+    _seed_command_context(
+        room, room.left_cover, start=50, target=50, started_at=now - timedelta(seconds=121)
+    )
     room._automation_move_in_progress = False
-    room._last_commanded_position[room.left_cover] = 50
 
     await cover_listener(_cover_event(room.left_cover, 52))
     assert override.turn_on_calls == 1
@@ -673,5 +704,84 @@ async def test_override_switch_turns_off_when_restored_deadline_is_expired(monke
     assert entity.is_on is False
     assert entity.extra_state_attributes == {}
     assert schedule_calls["count"] == 0
+
+
+async def test_override_expiry_reseeds_state_and_clears_manual_pending(monkeypatch):
+    """When the hold expires, tracked state must be re-seeded from the live
+    cover position and the manual latch released, so automation resumes
+    against reality rather than a stale value."""
+    hass = FakeHass()
+    room = make_room()
+    entity = OverrideSwitch(hass, room, room.config_entry)
+    entity.async_write_ha_state = lambda: None
+
+    room.manual_pending = True
+    # 26% maps to SHADE under default calibration (open75 medium50 shade25 closed0).
+    hass.states.set(room.left_cover, "open", attributes={"current_position": 26})
+
+    await entity._async_expire(None)
+
+    assert room.current_state == SemanticState.SHADE
+    assert room.manual_pending is False
+    assert entity.is_on is False
+
+
+async def test_override_expiry_holds_when_cover_unavailable(monkeypatch):
+    """If the cover can't report a usable position at expiry, keep holding
+    (retry later) instead of releasing the latch against stale state."""
+    hass = FakeHass()
+    room = make_room()
+    entity = OverrideSwitch(hass, room, room.config_entry)
+    entity.async_write_ha_state = lambda: None
+
+    room.manual_pending = True
+    hass.states.set(room.left_cover, "unavailable")
+
+    scheduled: dict[str, float] = {}
+
+    def _fake_schedule_expiry(*, seconds=None):
+        scheduled["seconds"] = seconds
+
+    monkeypatch.setattr(entity, "_schedule_expiry", _fake_schedule_expiry)
+
+    await entity._async_expire(None)
+
+    assert room.manual_pending is True
+    assert scheduled["seconds"] == 60
+
+
+async def test_slide_expiry_reschedules_from_now(monkeypatch):
+    hass = FakeHass()
+    room = make_room()
+    entity = OverrideSwitch(hass, room, room.config_entry)
+
+    calls = {"count": 0}
+
+    def _fake_schedule_expiry(*, seconds=None):
+        calls["count"] += 1
+
+    monkeypatch.setattr(entity, "_schedule_expiry", _fake_schedule_expiry)
+
+    entity.slide_expiry()
+
+    assert calls["count"] == 1
+
+
+async def test_manual_turn_off_reseeds_and_clears_manual_pending(monkeypatch):
+    """Explicitly switching the override off also resumes from reality."""
+    hass = FakeHass()
+    room = make_room()
+    entity = OverrideSwitch(hass, room, room.config_entry)
+    entity.async_write_ha_state = lambda: None
+    entity._attr_is_on = True
+
+    room.manual_pending = True
+    hass.states.set(room.left_cover, "open", attributes={"current_position": 74})
+
+    await entity.async_turn_off()
+
+    assert room.current_state == SemanticState.OPEN
+    assert room.manual_pending is False
+    assert entity.is_on is False
 
 

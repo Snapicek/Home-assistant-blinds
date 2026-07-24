@@ -11,6 +11,7 @@ from datetime import timedelta
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -134,7 +135,42 @@ class OverrideSwitch(_RoomSwitchBase):
     async def async_turn_off(self, **kwargs) -> None:
         self._cancel_expiry()
         self._override_until = None
+        # Resume from reality: re-seed tracked state from the live cover
+        # position, then release the manual latch so automation can move again.
+        await self._async_reseed_current_state()
+        self._room.manual_pending = False
         await super().async_turn_off(**kwargs)
+
+    @callback
+    def slide_expiry(self) -> None:
+        """Re-arm the auto-expiry from now (continued manual activity)."""
+        self._schedule_expiry()
+
+    async def _async_reseed_current_state(self) -> bool:
+        """Adopt the left cover's live position as tracked current_state.
+
+        Returns False when the cover isn't reporting a usable position yet
+        (e.g. still reconnecting), so callers can decide whether to hold.
+        """
+        from . import cover_control
+
+        state = self._hass.states.get(self._room.left_cover)
+        if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            return False
+        position = state.attributes.get("current_position")
+        try:
+            position = float(position) if position is not None else None
+        except (TypeError, ValueError):
+            position = None
+        if position is None:
+            return False
+        synced = cover_control.nearest_semantic_state(self._entry, "left", position)
+        self._room.current_state = synced
+        await self._room.async_persist()
+        state_select = self._room.entities.get("state_select")
+        if state_select is not None:
+            state_select.apply_external_state_update(synced)
+        return True
 
     @callback
     def _schedule_expiry(self, *, seconds: float | None = None) -> None:
@@ -156,5 +192,12 @@ class OverrideSwitch(_RoomSwitchBase):
 
     async def _async_expire(self, _now) -> None:
         self._unsub_expiry = None
+        # Only release the hold once we can re-seed from a real cover
+        # position; otherwise keep holding and retry shortly so automation
+        # doesn't resume against a stale tracked state.
+        if not await self._async_reseed_current_state():
+            self._schedule_expiry(seconds=60)
+            return
         self._override_until = None
+        self._room.manual_pending = False
         await super().async_turn_off()
