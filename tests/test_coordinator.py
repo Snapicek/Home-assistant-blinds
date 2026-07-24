@@ -563,12 +563,15 @@ async def test_startup_reconciles_current_state_from_actual_position(monkeypatch
     )
     room = make_room()
     room.current_state = None
-    room.entities["enabled"] = FakeSwitch(True)
+    # Disabled so the reconciled state is observable in the result without an
+    # immediate resolver move overwriting result["current"].
+    room.entities["enabled"] = FakeSwitch(False)
 
     coord = _make_coordinator(monkeypatch, hass, room)
     result = await coord._async_update_data()
 
     assert result["current"] == SemanticState.SHADE
+    assert room.current_state == SemanticState.SHADE
 
 
 async def test_startup_reconcile_does_not_override_persisted_state(monkeypatch):
@@ -581,11 +584,12 @@ async def test_startup_reconcile_does_not_override_persisted_state(monkeypatch):
     )
     room = make_room()
     room.current_state = SemanticState.MEDIUM  # persisted
-    room.entities["enabled"] = FakeSwitch(True)
+    room.entities["enabled"] = FakeSwitch(False)
 
     coord = _make_coordinator(monkeypatch, hass, room)
     result = await coord._async_update_data()
 
     assert result["current"] == SemanticState.MEDIUM
+    assert room.current_state == SemanticState.MEDIUM
 
 
